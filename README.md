@@ -37,7 +37,47 @@ AI が書いたコードを、人間が diff を読まずにマージできる�
 5. 検証役のモデルを固定しない。探す対象と報告の基準だけを与えるので、新しいモデルに替わればそのまま検証が強くなる
 6. 特定の言語やツールの書き方をハーネスに埋め込まない。どのパスを人間の確認に回すか、どの検査を実行するかは対象リポジトリの設定で決める
 
-## hook と CI の役割
+## 各要素の役割
+
+1 つの変更は 4 つの段階を通る。段階ごとに、次の要素が働く。
+
+```mermaid
+flowchart LR
+    subgraph P1["1. 仕様を固める"]
+        direction TB
+        S1["skill: acceptance-first<br/>依頼を検証し、仕様とテストを書かせる"]
+        A1["検証役: spec-critic<br/>依頼と仕様を疑う"]
+    end
+    subgraph P2["2. 実装する"]
+        direction TB
+        H1["hook: PreToolUse<br/>保護されたファイルの編集前に人間へ確認する"]
+        H2["hook: PostToolUse<br/>編集のたびに formatter と lint を実行する"]
+        H3["hook: Stop<br/>検査が通るまで作業を終了させない"]
+    end
+    subgraph P3["3. 引き継ぐ"]
+        direction TB
+        S2["skill: handoff<br/>検証を受けて PR の本文を用意させる"]
+        A2["検証役: spec-auditor<br/>仕様と差分を照合する"]
+        A3["検証役: security-reviewer<br/>差分を攻撃者の視点で読む"]
+    end
+    subgraph P4["4. マージを判定する"]
+        direction TB
+        C1["CI: merge-gate<br/>検査の実行、仕様と引き継ぎの確認<br/>秘密の値の検出、リスクの分類"]
+    end
+    SC[("scripts/checks<br/>検査の実体")]
+    P1 --> P2 --> P3 --> P4
+    H3 -.-> SC
+    C1 -.-> SC
+```
+
+要素の種類によって、できることと強制力が違う。
+
+| 種類 | 役割 | 強制力 |
+| --- | --- | --- |
+| skill | 作業の進め方と、人間の承認を得る時点を示す | ない。守られる保証はない |
+| 検証役 | 実装の文脈を持たずに検証し、指摘を返す | ない。指摘は人間の判断材料にする |
+| hook | 手元で検査を実行し、通るまで先へ進ませない | ある。ただしプラグインを無効にすれば働かない |
+| CI | マージの可否を決める | ある。エージェントからは迂回できない |
 
 hook と skill が働くのは、プラグインを有効にした Claude Code の中だけである。利用者はプラグインを無効にでき、シェルコマンドでファイルを書き換えれば編集前の hook も働かない。そのため、マージの可否は CI の判定で決める。プラグインは、CI で落ちる前にエージェント自身に直させるために使う。
 
@@ -47,23 +87,33 @@ hook と skill が働くのは、プラグインを有効にした Claude Code �
 
 ### 1. プラグインを入れる
 
-対象リポジトリで次の 2 つを実行する。
+対象リポジトリで次の 3 つを実行する。3 つ目は自動更新を有効にする。
 
 ```bash
 claude plugin marketplace add shoooout/merge-gate-harness --scope project
 claude plugin install merge-gate@merge-gate-harness --scope project
+jq '.extraKnownMarketplaces["merge-gate-harness"].autoUpdate = true' .claude/settings.json > .claude/settings.json.tmp && mv .claude/settings.json.tmp .claude/settings.json
 ```
 
-このコマンドは、その時点の最新を入れる。入れたあとで最新に更新するには、次の 2 つを実行する。
+`--scope project` は設定を対象リポジトリの `.claude/settings.json` に書く。このファイルを commit すればチームで共有できる。プラグイン本体は各自の端末に入らないので、他の人もそれぞれ `claude plugin install` を 1 回実行する。
+
+#### 自動更新
+
+自動更新を有効にすると、Claude Code が main の最新を自動で取得する。利用者の操作は要らない。
+
+- 更新は、セッションで最初のメッセージを送ったあと、最大 10 分の間を置いて実行される
+- 取得した版が使われるのは、次に Claude Code を起動したときからである。実行中のセッションで使うには `/reload-plugins` を実行する
+- リポジトリが private の場合は、git が入力なしで認証できる必要がある。SSH の鍵を `ssh-agent` に入れておくか、`gh auth login` のあとに `gh auth setup-git` を実行しておく。認証できないと、更新は何も表示せずに失敗し、古い版が残る
+- 環境変数 `DISABLE_AUTOUPDATER`、`DISABLE_UPDATES`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` のどれかを設定していると、自動更新は止まる。`FORCE_AUTOUPDATE_PLUGINS=1` を合わせて設定すれば、プラグインの自動更新だけは動く
+
+すぐに最新にしたいときは、次の 2 つを実行する。
 
 ```bash
 claude plugin marketplace update merge-gate-harness
 claude plugin update merge-gate@merge-gate-harness
 ```
 
-特定の版に固定したいときは、`shoooout/merge-gate-harness#v0.1.0` のように `#` のあとにタグを付けて追加する。
-
-`--scope project` は設定を対象リポジトリの `.claude/settings.json` に書く。このファイルを commit すればチームで共有できる。プラグイン本体は各自の端末に入らないので、他の人もそれぞれ `claude plugin install` を 1 回実行する。自分だけで試すときは `--scope local` にする。
+特定の版に固定したいときは、自動更新を有効にせず、`shoooout/merge-gate-harness#v0.1.0` のように `#` のあとにタグを付けて追加する。
 
 <details>
 <summary>コマンドを使わず、設定ファイルに直接書く場合</summary>
@@ -74,7 +124,8 @@ claude plugin update merge-gate@merge-gate-harness
 {
   "extraKnownMarketplaces": {
     "merge-gate-harness": {
-      "source": { "source": "github", "repo": "shoooout/merge-gate-harness" }
+      "source": { "source": "github", "repo": "shoooout/merge-gate-harness" },
+      "autoUpdate": true
     }
   },
   "enabledPlugins": {
