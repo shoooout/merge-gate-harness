@@ -15,13 +15,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: bash tests/run.sh
 
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # -P SCRIPTDIR: source するファイルの相対パスを、実行時のディレクトリではなくスクリプトの場所から解決する。
       # -S warning: 情報レベルの指摘では落とさない。JSON に埋めたシェルの変数を単一引用符で囲む、
       # trap から呼ぶ関数を定義する、といった意図した書き方が情報レベルで指摘されるため。
