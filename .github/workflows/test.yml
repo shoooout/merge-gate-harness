@@ -9,12 +9,11 @@ permissions:
   contents: read
 
 jobs:
+  # macOS では実行しない。GitHub の macOS の実行環境は混雑していて、割り当てられないままジョブが
+  # 取り消されることがあり、コードに問題がなくても CI が失敗になる。
+  # macOS 標準の bash 3.2 での動作は、push の前に手元で tests/run.sh を実行して確かめる。
   test:
-    strategy:
-      matrix:
-        # 利用者の手元は macOS 標準の bash 3.2、CI は Linux の新しい bash なので、両方で確かめる
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: bash tests/run.sh

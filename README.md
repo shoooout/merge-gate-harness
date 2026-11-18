@@ -364,6 +364,8 @@ claude plugin validate .
 
 スクリプトは macOS 標準の bash 3.2 でも動くように書く。外部コマンドは `git` と `jq` だけに依存する。
 
+CI がテストを実行するのは Ubuntu だけである。bash 3.2 での動作は CI では確かめていないので、push の前に macOS の手元で `bash tests/run.sh` を実行する。
+
 手元で試すには、対象リポジトリで次のように起動する。
 
 ```bash
