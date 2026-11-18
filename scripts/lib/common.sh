@@ -106,6 +106,55 @@ mg_relpath() {
   esac
 }
 
+# mg_added_lines <比較の起点>: このブランチで追加された行を「パス<TAB>行番号<TAB>内容」の形で出力する。
+# まだ git に追加していないファイルは、全行を追加された行として扱う。
+# 変更後のファイル全体ではなく追加された行だけを見るのは、以前からある記述を今回の変更の責任にしないためである。
+mg_added_lines() {
+  {
+    git -C "$MG_ROOT" -c core.quotepath=off diff -U0 --no-renames --no-color "$1" -- | awk '
+      # ファイルごとのヘッダーの中でだけ「+++ 」をパスとして読む。
+      # 本文の追加行がたまたま「++ 」で始まっていても、パスと取り違えないようにする。
+      /^diff --git / { header = 1; next }
+      header && /^\+\+\+ / {
+        path = substr($0, 5)
+        sub(/^b\//, "", path)
+        sub(/\t$/, "", path)
+        next
+      }
+      /^@@ / {
+        header = 0
+        split($3, range, ",")
+        line = substr(range[1], 2) + 0
+        next
+      }
+      !header && /^\+/ {
+        printf "%s\t%d\t%s\n", path, line, substr($0, 2)
+        line++
+      }
+    '
+    git -C "$MG_ROOT" -c core.quotepath=off ls-files -o --exclude-standard | while IFS= read -r path; do
+      # バイナリは行として読めないので対象にしない
+      grep -Iq . "$MG_ROOT/$path" 2>/dev/null || continue
+      awk -v path="$path" '{ printf "%s\t%d\t%s\n", path, NR, $0 }' "$MG_ROOT/$path"
+    done
+  } | awk -F '\t' -v state="$MG_STATE_DIR/" 'index($1, state) != 1'
+}
+
+# mg_grep_added <mg_added_lines の出力> <正規表現>: 内容が一致した行を「パス:行番号」で出力する。一致がなければ 1。
+# 一致した内容そのものは出力しない。秘密の値の検出にも使うので、検出結果に値を載せないためである。
+mg_grep_added() {
+  local numbers
+  numbers="$(printf '%s\n' "$1" | cut -f3- | grep -nE -- "$2" | cut -d: -f1 | tr '\n' ',')"
+  [ -n "$numbers" ] || return 1
+  printf '%s\n' "$1" | awk -F '\t' -v numbers="$numbers" '
+    BEGIN {
+      count = split(numbers, list, ",")
+      for (i = 1; i <= count; i++) wanted[list[i]] = 1
+    }
+    NR in wanted { print $1 ":" $2 }
+  '
+}
+
 # 比較の起点にするコミットを出力する。設定の base との merge-base を使うので、
 # base ブランチ側だけが進んでいても、このブランチの変更だけが差分になる。
 mg_merge_base() {

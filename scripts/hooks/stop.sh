@@ -69,6 +69,13 @@ if [ -f "$MG_ROOT/$MG_STATE_DIR/locked" ] &&
   fi
 fi
 
+# 秘密の値は、コミットされる前に止める。コミットされたあとでは、値を無効にして発行し直すしかなくなる。
+secrets_output="$(cd "$MG_ROOT" && bash "$SCRIPTS_DIR/checks/secrets.sh" 2>&1)"
+if [ $? -eq 1 ]; then
+  report="$report$secrets_output
+"
+fi
+
 verify_output="$(cd "$MG_ROOT" && bash "$SCRIPTS_DIR/checks/verify.sh" 2>&1)"
 verify_status=$?
 if [ "$verify_status" -eq 2 ]; then

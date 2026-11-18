@@ -3,6 +3,7 @@
   "checks": {
     "verify": ["npm test", "npx tsc --noEmit"],
     "ci": ["npm audit --audit-level=high"],
+    "red": ["npm test"],
     "on_edit": [
       { "pattern": "*.ts", "command": "npx eslint --fix" },
       { "pattern": "*.ts", "command": "npx prettier --write" }
@@ -13,8 +14,11 @@
     "dependencies": ["package.json", "package-lock.json"],
     "gate": ["tsconfig.json", ".eslintrc*"],
     "human_review": ["src/auth/*", "src/billing/*", "db/migrate/*", "infra/*"],
-    "no_spec": ["*.md", "docs/*"]
+    "no_spec": ["*.md", "docs/*"],
+    "secrets_ignore": ["tests/fixtures/*"]
   },
+  "review_markers": ["eslint-disable", "@ts-ignore", "@ts-expect-error", "@ts-nocheck"],
+  "secret_patterns": [],
   "skip_markers": ["\\.skip\\(", "(^|[^A-Za-z])xit\\(", "(^|[^A-Za-z])xdescribe\\("],
   "limits": { "max_changed_lines": 400 },
   "handoff_sections": ["動作確認の手順", "影響範囲", "検証できなかったこと"]

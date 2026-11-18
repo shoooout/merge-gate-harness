@@ -76,6 +76,25 @@ $test_files
 EOF
 fi
 
+# lint や型検査の抑制のように、検査を黙らせる記述が追加されていれば人間に回す。
+# 検査が通ったという事実は、その検査が黙らされていないことを前提にしている。
+# 何が抑制に当たるかはツールごとに違うので、ここには一覧を持たず、対象リポジトリの設定から読む。
+review_markers="$(mg_config '.review_markers[]?')"
+if [ -n "$review_markers" ]; then
+  added_lines="$(mg_added_lines "$merge_base")"
+  while IFS= read -r marker; do
+    [ -n "$marker" ] || continue
+    hits="$(mg_grep_added "$added_lines" "$marker")" || continue
+    while IFS= read -r hit; do
+      add_reason "人間が確認すると決めた記述を追加している: $hit ($marker)"
+    done <<EOF
+$hits
+EOF
+  done <<EOF
+$review_markers
+EOF
+fi
+
 max_lines="$(mg_config '.limits.max_changed_lines')"
 if [ -n "$max_lines" ]; then
   # バイナリは numstat が "-" を返すので行数に数えない
