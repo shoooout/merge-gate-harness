@@ -1,0 +1,31 @@
+# 対象リポジトリの .github/workflows/merge-gate.yml に置く例。
+# branch protection で、このジョブを必須のステータスチェックにする。
+name: merge-gate
+
+on:
+  pull_request:
+  # 人間の確認が必要な区分では、承認が付いた時点で判定をやり直す必要がある
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  merge-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 分岐元との差分を取るので、履歴をすべて取得する
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # ここに、対象リポジトリの言語の実行環境と依存を用意するステップを置く。
+      # .merge-gate.json の checks に書いたコマンドが、この環境で動く必要がある。
+
+      # ハーネスの変更で全リポジトリの CI が同時に落ちないよう、タグか commit SHA で固定する
+      - uses: shoooout/merge-gate-harness@v0.0.1
+        with:
+          github-token: ${{ github.token }}

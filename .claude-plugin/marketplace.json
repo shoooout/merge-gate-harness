@@ -1,0 +1,15 @@
+{
+  "name": "merge-gate-harness",
+  "description": "merge-gate プラグインを配布するための、プラグイン 1 つだけの marketplace。",
+  "owner": {
+    "name": "shoooout"
+  },
+  "plugins": [
+    {
+      "name": "merge-gate",
+      "description": "AI が書いたコードを、人間が diff を読まずにマージできるかを機械的に判定するハーネス。",
+      "category": "development",
+      "source": "./"
+    }
+  ]
+}
