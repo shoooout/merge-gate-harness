@@ -60,8 +60,7 @@ fi
 # 承認済みの仕様がある作業では、実装後も仕様との対応が保たれているかを確かめる。
 # 承認の時点では通っていても、実装中に受け入れ条件のテストを消したり、
 # 承認時に示していない既存テストを変更したりすると、ここで落ちる。
-if [ -f "$MG_ROOT/$MG_STATE_DIR/locked" ] &&
-  cut -f2 "$MG_ROOT/$MG_STATE_DIR/locked" | grep -qxF -- "$MG_SPEC_PATH" &&
+if mg_locked_paths | grep -qxF -- "$MG_SPEC_PATH" &&
   [ -f "$MG_ROOT/$MG_SPEC_PATH" ]; then
   if ! spec_output="$(cd "$MG_ROOT" && bash "$SCRIPTS_DIR/checks/spec.sh" "$MG_SPEC_PATH" 2>&1)"; then
     report="$report$spec_output

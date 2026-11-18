@@ -2,14 +2,18 @@
 # 人間が承認した仕様と受け入れテストを記録し、承認後に書き換えられていないかを確かめる。
 # 実装に合わせてテストや仕様のほうを直す、という逆転を検知するための仕組みである。
 #
-# 記録先は対象リポジトリの .merge-gate/locked で、作業中のブランチだけに意味がある手元の状態なので
-# コミットしない。対象リポジトリの .gitignore に .merge-gate/ を入れておく。
+# 記録先は対象リポジトリの .merge-gate/ で、手元だけの状態なのでコミットしない。
+# 対象リポジトリの .gitignore に .merge-gate/ を入れておく。
+#
+# 記録は、それを取ったブランチでだけ有効になる。別のブランチにいる間は無いものとして扱うので、
+# マージ後に新しいブランチで次の作業を始めるときに、前の記録を手で消す必要はない。
 #
 # 使い方:
-#   lock.sh add <ファイル>...  承認された内容として記録する。記録済みのファイルは上書きする
+#   lock.sh add <ファイル>...  承認された内容として記録する。記録済みのファイルは上書きする。
+#                              別のブランチの記録が残っていれば、捨ててから記録する
 #   lock.sh verify             記録した内容から変わったファイルを表示する
 #   lock.sh list               記録しているファイルを表示する
-#   lock.sh clear              記録をすべて消す。マージ後や作業をやり直すときに使う
+#   lock.sh clear              記録をすべて消す。同じブランチで別の依頼を始めるときに使う
 # 終了コード: 0 = 成功、1 = verify で変更が見つかった、2 = 使い方や環境の問題
 set -uo pipefail
 
@@ -18,6 +22,7 @@ set -uo pipefail
 
 mg_find_root || mg_die "git リポジトリの中で実行する"
 LOCK_FILE="$MG_ROOT/$MG_STATE_DIR/locked"
+BRANCH_FILE="$MG_ROOT/$MG_STATE_DIR/branch"
 
 # 記録は「<git のオブジェクト ID><タブ><ルートからの相対パス>」の行で持つ。
 # shasum と sha256sum の違いを避けるため、どの環境にもある git hash-object を使う。
@@ -55,7 +60,10 @@ case "$cmd" in
     fi
 
     mkdir -p "$MG_ROOT/$MG_STATE_DIR"
-    touch "$LOCK_FILE"
+    if ! mg_lock_is_current; then
+      : >"$LOCK_FILE"
+      mg_current_branch >"$BRANCH_FILE"
+    fi
     while IFS= read -r rel; do
       [ -n "$rel" ] || continue
       hash="$(hash_of "$rel")" || mg_die "ハッシュを計算できない: $rel"
@@ -68,7 +76,7 @@ $rels
 EOF
     ;;
   verify)
-    [ -f "$LOCK_FILE" ] || exit 0
+    mg_lock_is_current || exit 0
     changed=0
     while IFS="$(printf '\t')" read -r hash rel; do
       [ -n "$rel" ] || continue
@@ -83,11 +91,10 @@ EOF
     [ "$changed" -eq 0 ]
     ;;
   list)
-    [ -f "$LOCK_FILE" ] || exit 0
-    cut -f2 "$LOCK_FILE"
+    mg_locked_paths
     ;;
   clear)
-    rm -f "$LOCK_FILE"
+    rm -f "$LOCK_FILE" "$BRANCH_FILE"
     ;;
   *)
     mg_die "使い方: lock.sh add <ファイル>... | verify | list | clear"

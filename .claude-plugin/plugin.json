@@ -1,6 +1,5 @@
 {
   "name": "merge-gate",
-  "version": "0.1.0",
   "description": "AI が書いたコードを、人間が diff を読まずにマージできるかを機械的に判定するハーネス。編集前の承認確認、終了前の検査、仕様と差分を照合する検証役を提供する。",
   "author": {
     "name": "shoooout"

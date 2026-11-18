@@ -17,6 +17,28 @@ MG_BUILTIN_GATE_PATTERNS=".merge-gate.json
 # shellcheck disable=SC2034
 MG_SPEC_PATH="$MG_STATE_DIR/spec.md"
 
+# 現在のブランチ名を出力する。ブランチの上にいないときは空になる。
+mg_current_branch() {
+  git -C "$MG_ROOT" symbolic-ref --quiet --short HEAD 2>/dev/null
+}
+
+# 承認の記録が、現在のブランチで取られたものなら 0。
+# 記録は、それを取ったブランチの作業にだけ意味がある。マージ後に別のブランチで次の作業を始めたとき、
+# 前の作業の記録で編集の確認が出たり終了を止められたりしないよう、別のブランチの記録は無いものとして扱う。
+# 削除ではなく無視にしているのは、一時的に別のブランチを見に行っただけで承認を失わないためである。
+mg_lock_is_current() {
+  local lock="$MG_ROOT/$MG_STATE_DIR/locked" stamp="$MG_ROOT/$MG_STATE_DIR/branch"
+  [ -f "$lock" ] || return 1
+  [ -f "$stamp" ] || return 1
+  [ "$(cat "$stamp")" = "$(mg_current_branch)" ]
+}
+
+# 現在のブランチで有効な承認の記録から、承認済みのパスを 1 行ずつ出力する。有効な記録がなければ何も出力しない。
+mg_locked_paths() {
+  mg_lock_is_current || return 0
+  cut -f2 "$MG_ROOT/$MG_STATE_DIR/locked"
+}
+
 # mg_section_body <見出しに含まれる語>: 標準入力の Markdown から、その見出しの節の本文を出力する。
 # 見出しの階層は問わない。仕様の文書では「## 要件」、PR の本文では「### 要件」のように階層が変わるため。
 # コードブロックの中の「# 」で始まる行は、シェルのコメントなどであって見出しではないので、節の区切りにしない。

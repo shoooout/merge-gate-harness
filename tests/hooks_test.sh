@@ -63,6 +63,14 @@ echo "test('new', () => {})" >tests/new.test.js
 run_hook pre-edit.sh "$(edit_input "$REPO/tests/new.test.js")"
 expect_ask
 
+it "別のブランチで承認済みとして記録したファイルの編集は、確認なしで通す"
+new_repo "$CONFIG"
+echo "test('new', () => {})" >tests/new.test.js
+"$SCRIPTS/lock.sh" add tests/new.test.js >/dev/null
+git switch -q -c next
+run_hook pre-edit.sh "$(edit_input "$REPO/tests/new.test.js")"
+expect_pass_through
+
 it "ゲートの設定ファイルの編集は利用者に確認する"
 new_repo "$CONFIG"
 run_hook pre-edit.sh "$(edit_input "$REPO/.merge-gate.json")"

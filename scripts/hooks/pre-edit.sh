@@ -44,8 +44,7 @@ if mg_match "$rel" dependencies; then
   ask "依存の追加・削除は、人間の承認なしに行えない"
 fi
 
-if [ -f "$MG_ROOT/$MG_STATE_DIR/locked" ] &&
-  cut -f2 "$MG_ROOT/$MG_STATE_DIR/locked" | grep -qxF -- "$rel"; then
+if mg_locked_paths | grep -qxF -- "$rel"; then
   ask "承認済みの仕様・受け入れテストは、人間の承認なしに変更できない。承認を得たら lock.sh add で記録し直す"
 fi
 

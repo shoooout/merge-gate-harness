@@ -25,7 +25,8 @@ jobs:
       # ここに、対象リポジトリの言語の実行環境と依存を用意するステップを置く。
       # .merge-gate.json の checks に書いたコマンドが、この環境で動く必要がある。
 
-      # ハーネスの変更で全リポジトリの CI が同時に落ちないよう、タグか commit SHA で固定する
-      - uses: shoooout/merge-gate-harness@v0.1.0
+      # main を指定して、常に最新の検査を使う。手元のプラグインと同じ版の検査を CI でも実行するためである。
+      # 特定の版に固定したいときは、main の代わりにタグか commit SHA を指定する。
+      - uses: shoooout/merge-gate-harness@main
         with:
           github-token: ${{ github.token }}

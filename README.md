@@ -50,11 +50,18 @@ hook と skill が働くのは、プラグインを有効にした Claude Code �
 対象リポジトリで次の 2 つを実行する。
 
 ```bash
-claude plugin marketplace add shoooout/merge-gate-harness#v0.1.0 --scope project
+claude plugin marketplace add shoooout/merge-gate-harness --scope project
 claude plugin install merge-gate@merge-gate-harness --scope project
 ```
 
-`#` のあとのタグでバージョンを固定する。固定しないと、ハーネスの変更が全リポジトリに同時に及ぶ。
+このコマンドは、その時点の最新を入れる。入れたあとで最新に更新するには、次の 2 つを実行する。
+
+```bash
+claude plugin marketplace update merge-gate-harness
+claude plugin update merge-gate@merge-gate-harness
+```
+
+特定の版に固定したいときは、`shoooout/merge-gate-harness#v0.1.0` のように `#` のあとにタグを付けて追加する。
 
 `--scope project` は設定を対象リポジトリの `.claude/settings.json` に書く。このファイルを commit すればチームで共有できる。プラグイン本体は各自の端末に入らないので、他の人もそれぞれ `claude plugin install` を 1 回実行する。自分だけで試すときは `--scope local` にする。
 
@@ -67,7 +74,7 @@ claude plugin install merge-gate@merge-gate-harness --scope project
 {
   "extraKnownMarketplaces": {
     "merge-gate-harness": {
-      "source": { "source": "github", "repo": "shoooout/merge-gate-harness", "ref": "v0.1.0" }
+      "source": { "source": "github", "repo": "shoooout/merge-gate-harness" }
     }
   },
   "enabledPlugins": {
@@ -231,7 +238,7 @@ CI の結果によって、その先が分かれる。
 
 ### 補足
 
-- マージしたあとや作業をやり直すときは、`.merge-gate/` を削除して承認の記録を消す
+- 承認の記録を手で消す必要はない。記録はそれを取ったブランチでだけ有効で、別のブランチでは無視される。同じブランチで新しい依頼を始めたときは、`acceptance-first` が前の記録を消す
 - 分岐元から何も変更していない間は、終了時の検査は実行されない。質問への回答や調査だけのやり取りが該当する
 - 終了時の検査が失敗したまま、エージェントが何も変更せずに再び終わろうとした場合は、終了を許す。同じ理由で止め続けても進まないためで、その変更は CI で落ちる
 

@@ -267,6 +267,44 @@ cp tests/add.test.js tests/add.test.js.bak
 run "$SCRIPTS/lock.sh" list
 expect_output_contains "tests/add.test.js.bak"
 
+it "別のブランチで取った記録は、無いものとして扱う"
+new_repo "$CONFIG"
+"$SCRIPTS/lock.sh" add tests/add.test.js >/dev/null
+git switch -q -c next
+echo "// 次の作業での変更" >>tests/add.test.js
+run "$SCRIPTS/lock.sh" verify
+expect_status 0
+run "$SCRIPTS/lock.sh" list
+expect_output_empty
+
+it "元のブランチに戻れば、記録は消えずに有効なままである"
+new_repo "$CONFIG"
+"$SCRIPTS/lock.sh" add tests/add.test.js >/dev/null
+git switch -q -c next
+"$SCRIPTS/lock.sh" verify >/dev/null
+git switch -q work
+echo "// 緩めた" >>tests/add.test.js
+run "$SCRIPTS/lock.sh" verify
+expect_status 1
+expect_output_contains "承認後に変更されている: tests/add.test.js"
+
+it "別のブランチで記録を取ると、前のブランチの記録を捨てて新しく始める"
+new_repo "$CONFIG"
+"$SCRIPTS/lock.sh" add tests/add.test.js >/dev/null
+git switch -q -c next
+echo "test('next', () => {})" >tests/next.test.js
+"$SCRIPTS/lock.sh" add tests/next.test.js >/dev/null
+run "$SCRIPTS/lock.sh" list
+[ "$OUTPUT" = "tests/next.test.js" ] || fail "前のブランチの記録が残っている: $OUTPUT"
+
+it "clear で、現在のブランチの記録を消せる"
+new_repo "$CONFIG"
+"$SCRIPTS/lock.sh" add tests/add.test.js >/dev/null
+"$SCRIPTS/lock.sh" clear
+echo "// 別の依頼での変更" >>tests/add.test.js
+run "$SCRIPTS/lock.sh" verify
+expect_status 0
+
 it "記録がなければ verify は成功する"
 new_repo "$CONFIG"
 run "$SCRIPTS/lock.sh" verify
