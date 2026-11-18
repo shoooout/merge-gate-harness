@@ -21,13 +21,20 @@ runs:
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/scripts/checks/verify.sh" --ci
 
-    - name: PR の本文に引き継ぎの情報があるかを確かめる
+    - name: PR の本文に、仕様と引き継ぎの情報があるかを確かめる
       shell: bash
       env:
         # 本文は利用者が自由に書ける文字列なので、スクリプトに直接展開せず環境変数で渡す。
         # 直接展開すると、本文に書かれたシェルの構文がそのまま実行される。
         PR_BODY: ${{ github.event.pull_request.body }}
-      run: printf '%s\n' "$PR_BODY" | bash "$GITHUB_ACTION_PATH/scripts/checks/handoff.sh"
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+      run: |
+        body_file="$(mktemp)"
+        printf '%s\n' "$PR_BODY" >"$body_file"
+        status=0
+        bash "$GITHUB_ACTION_PATH/scripts/checks/spec.sh" "$body_file" "origin/$BASE_REF" || status=1
+        bash "$GITHUB_ACTION_PATH/scripts/checks/handoff.sh" "$body_file" || status=1
+        exit "$status"
 
     - name: 人間の確認が必要な変更かを分類する
       id: classify

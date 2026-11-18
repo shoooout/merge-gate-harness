@@ -12,6 +12,36 @@ MG_BUILTIN_GATE_PATTERNS=".merge-gate.json
 .github/*
 .claude/*"
 
+# 作業中の仕様を置く場所。承認の記録と同じく、手元だけの状態としてコミットしない。
+MG_SPEC_PATH="$MG_STATE_DIR/spec.md"
+
+# mg_section_body <見出しに含まれる語>: 標準入力の Markdown から、その見出しの節の本文を出力する。
+# 見出しの階層は問わない。仕様の文書では「## 要件」、PR の本文では「### 要件」のように階層が変わるため。
+# コードブロックの中の「# 」で始まる行は、シェルのコメントなどであって見出しではないので、節の区切りにしない。
+mg_section_body() {
+  awk -v section="$1" '
+    /^[ \t]*(```|~~~)/ {
+      fenced = !fenced
+      if (inside) print
+      next
+    }
+    !fenced && /^#+[ \t]/ {
+      inside = (index($0, section) > 0)
+      next
+    }
+    inside { print }
+  '
+}
+
+# mg_section_has_content <見出しに含まれる語>: 節があり、空白と HTML コメント以外の行を含めば 0。
+# PR テンプレートの説明用コメントだけが残った節を、書かれたものと数えないため。
+mg_section_has_content() {
+  mg_section_body "$1" |
+    grep -v -E '^[[:space:]]*$' |
+    grep -v -E '^[[:space:]]*<!--.*-->[[:space:]]*$' |
+    grep -q .
+}
+
 mg_die() {
   echo "merge-gate: $*" >&2
   exit 2

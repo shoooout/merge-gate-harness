@@ -12,7 +12,8 @@
     "tests": ["tests/*", "*.test.ts"],
     "dependencies": ["package.json", "package-lock.json"],
     "gate": ["tsconfig.json", ".eslintrc*"],
-    "human_review": ["src/auth/*", "src/billing/*", "db/migrate/*", "infra/*"]
+    "human_review": ["src/auth/*", "src/billing/*", "db/migrate/*", "infra/*"],
+    "no_spec": ["*.md", "docs/*"]
   },
   "skip_markers": ["\\.skip\\(", "(^|[^A-Za-z])xit\\(", "(^|[^A-Za-z])xdescribe\\("],
   "limits": { "max_changed_lines": 400 },

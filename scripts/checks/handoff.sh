@@ -22,16 +22,7 @@ sections="$(mg_config '.handoff_sections[]?')"
 missing=0
 while IFS= read -r section; do
   [ -n "$section" ] || continue
-  # 対象の見出しから次の見出しまでに、空白と HTML コメント以外の行が 1 つでもあれば中身ありとする。
-  # PR テンプレートの説明用コメントだけが残った節を、書かれたものと数えないため。
-  if ! printf '%s\n' "$body" | awk -v section="$section" '
-    /^#+[ \t]/ {
-      inside = (index($0, section) > 0)
-      next
-    }
-    inside && $0 !~ /^[ \t\r]*$/ && $0 !~ /^[ \t]*<!--.*-->[ \t\r]*$/ { found = 1 }
-    END { exit found ? 0 : 1 }
-  '; then
+  if ! printf '%s\n' "$body" | mg_section_has_content "$section"; then
     echo "PR の本文に「${section}」の節がないか、中身が空になっている"
     missing=$((missing + 1))
   fi

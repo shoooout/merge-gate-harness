@@ -31,22 +31,41 @@ cmd="${1:-}"
 case "$cmd" in
   add)
     [ $# -gt 0 ] || mg_die "記録するファイルを指定する"
+    rels=""
+    has_spec=0
+    for file in "$@"; do
+      [ -f "$file" ] || mg_die "ファイルがない: $file"
+      case "$file" in
+        /*) abs="$file" ;;
+        *) abs="$PWD/$file" ;;
+      esac
+      rel="$(mg_relpath "$abs")" || mg_die "リポジトリの外のファイルは記録できない: $file"
+      [ "$rel" = "$MG_SPEC_PATH" ] && has_spec=1
+      rels="$rels$rel
+"
+    done
+
+    # 形の整っていない仕様は、承認済みとして記録させない。記録を先に済ませると、
+    # 不備のある仕様のまま実装が始まり、あとから直すたびに承認の取り直しになる。
+    if [ "$has_spec" -eq 1 ]; then
+      if ! spec_output="$(bash "$(dirname "${BASH_SOURCE[0]}")/checks/spec.sh" "$MG_ROOT/$MG_SPEC_PATH" 2>&1)"; then
+        printf '%s\n' "$spec_output" >&2
+        mg_die "仕様の検査が通らないので、承認済みとして記録できない"
+      fi
+    fi
+
     mkdir -p "$MG_ROOT/$MG_STATE_DIR"
     touch "$LOCK_FILE"
-    for file in "$@"; do
-      abs="$(cd "$(dirname "$file")" 2>/dev/null && pwd -P)/$(basename "$file")"
-      [ -f "$abs" ] || mg_die "ファイルがない: $file"
-      root_real="$(cd "$MG_ROOT" && pwd -P)"
-      case "$abs" in
-        "$root_real"/*) rel="${abs#"$root_real"/}" ;;
-        *) mg_die "リポジトリの外のファイルは記録できない: $file" ;;
-      esac
-      hash="$(hash_of "$rel")" || mg_die "ハッシュを計算できない: $file"
+    while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
+      hash="$(hash_of "$rel")" || mg_die "ハッシュを計算できない: $rel"
       awk -F '\t' -v path="$rel" '$2 != path' "$LOCK_FILE" >"$LOCK_FILE.tmp"
       printf '%s\t%s\n' "$hash" "$rel" >>"$LOCK_FILE.tmp"
       mv "$LOCK_FILE.tmp" "$LOCK_FILE"
       echo "記録: $rel"
-    done
+    done <<EOF
+$rels
+EOF
     ;;
   verify)
     [ -f "$LOCK_FILE" ] || exit 0
