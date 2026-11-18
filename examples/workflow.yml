@@ -1,5 +1,10 @@
 # 対象リポジトリの .github/workflows/merge-gate.yml に置く例。
-# branch protection で、このジョブを必須のステータスチェックにする。
+# branch protection で、このジョブと、既存のテストのジョブの両方を必須のステータスチェックにする。
+#
+# このジョブはテストを実行しない。テストは既存の CI に任せる。
+#
+# 既存のテストのジョブがある場合は、このファイルを置く代わりに、そのジョブの末尾に
+# merge-gate のステップを足す方法もある。手順は README の「CI に組み込む」にある。
 name: merge-gate
 
 on:
@@ -22,8 +27,9 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      # ここに、対象リポジトリの言語の実行環境と依存を用意するステップを置く。
-      # .merge-gate.json の checks に書いたコマンドが、この環境で動く必要がある。
+      # テストが変更を検出できるかの確認(.merge-gate.json の checks.red)を使う場合は、
+      # ここに、言語の実行環境と依存を用意するステップを置く。この確認はテストを実行するためである。
+      # 使わない場合は、.merge-gate.json で checks.red を false にすれば、環境の用意は要らない。
 
       # main を指定して、常に最新の検査を使う。手元のプラグインと同じ版の検査を CI でも実行するためである。
       # 特定の版に固定したいときは、main の代わりにタグか commit SHA を指定する。

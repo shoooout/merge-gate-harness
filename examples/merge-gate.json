@@ -2,7 +2,6 @@
   "base": "origin/main",
   "checks": {
     "verify": ["npm test", "npx tsc --noEmit"],
-    "ci": ["npm audit --audit-level=high"],
     "red": ["npm test"],
     "on_edit": [
       { "pattern": "*.ts", "command": "npx eslint --fix" },
