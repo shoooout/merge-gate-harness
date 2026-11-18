@@ -13,6 +13,8 @@ MG_BUILTIN_GATE_PATTERNS=".merge-gate.json
 .claude/*"
 
 # 作業中の仕様を置く場所。承認の記録と同じく、手元だけの状態としてコミットしない。
+# このファイルの中では使わず、読み込む側のスクリプトが使うので、未使用の警告の対象から外す。
+# shellcheck disable=SC2034
 MG_SPEC_PATH="$MG_STATE_DIR/spec.md"
 
 # mg_section_body <見出しに含まれる語>: 標準入力の Markdown から、その見出しの節の本文を出力する。

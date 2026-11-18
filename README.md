@@ -74,7 +74,7 @@ tests/            スクリプトのテスト
 対象リポジトリで次の 2 つを実行する。
 
 ```bash
-claude plugin marketplace add shoooout/merge-gate-harness#v0.0.1 --scope project
+claude plugin marketplace add shoooout/merge-gate-harness#v0.1.0 --scope project
 claude plugin install merge-gate@merge-gate-harness --scope project
 ```
 
@@ -99,7 +99,7 @@ claude plugin install merge-gate@merge-gate-harness --scope project
 {
   "extraKnownMarketplaces": {
     "merge-gate-harness": {
-      "source": { "source": "github", "repo": "shoooout/merge-gate-harness", "ref": "v0.0.1" }
+      "source": { "source": "github", "repo": "shoooout/merge-gate-harness", "ref": "v0.1.0" }
     }
   },
   "enabledPlugins": {

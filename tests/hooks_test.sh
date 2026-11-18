@@ -17,16 +17,8 @@ CONFIG='{
   }
 }'
 
-# hook には Claude Code が JSON を標準入力で渡す。テストでは別のディレクトリから呼び、
-# hook がカレントディレクトリではなく入力の cwd を基準にすることも合わせて確かめる。
 edit_input() {
   jq -n --arg path "$1" --arg cwd "$REPO" '{tool_name: "Edit", tool_input: {file_path: $path}, cwd: $cwd}'
-}
-
-run_hook() {
-  local script="$1" payload="$2"
-  OUTPUT="$(cd "$WORK_ROOT" && printf '%s' "$payload" | bash "$SCRIPTS/hooks/$script" 2>&1)"
-  STATUS=$?
 }
 
 expect_ask() {
@@ -130,10 +122,6 @@ run_hook post-edit.sh "$(edit_input "$REPO/src/with space.js")"
 expect_status 2
 
 # ---- stop.sh
-
-stop_input() {
-  jq -n --arg cwd "$REPO" --argjson active "${1:-false}" '{cwd: $cwd, stop_hook_active: $active}'
-}
 
 it "分岐元から何も変えていなければ、検査せずに終了を許す"
 new_repo '{"base": "main", "checks": {"verify": ["false"]}}'

@@ -26,6 +26,6 @@ jobs:
       # .merge-gate.json の checks に書いたコマンドが、この環境で動く必要がある。
 
       # ハーネスの変更で全リポジトリの CI が同時に落ちないよう、タグか commit SHA で固定する
-      - uses: shoooout/merge-gate-harness@v0.0.1
+      - uses: shoooout/merge-gate-harness@v0.1.0
         with:
           github-token: ${{ github.token }}

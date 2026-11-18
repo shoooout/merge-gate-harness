@@ -138,8 +138,7 @@ expect_status 0
 it "秘密の値を書いたまま作業を終えようとしたら、終了させない"
 new_repo "$SECRET_CONFIG"
 echo "export const key = '$fake_aws_key'" >src/config.js
-OUTPUT="$(jq -n --arg cwd "$REPO" '{cwd: $cwd, stop_hook_active: false}' | bash "$SCRIPTS/hooks/stop.sh" 2>&1)"
-STATUS=$?
+run_hook stop.sh "$(stop_input)"
 expect_status 2
 expect_output_contains "秘密の値らしい文字列が追加されている"
 

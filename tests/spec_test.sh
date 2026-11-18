@@ -238,8 +238,7 @@ write_spec "$SPEC"
 write_tests AC-1 AC-2 AC-3
 "$SCRIPTS/lock.sh" add .merge-gate/spec.md tests/filter.test.js >/dev/null
 echo "// 期待値を変えた" >>tests/add.test.js
-OUTPUT="$(jq -n --arg cwd "$REPO" '{cwd: $cwd, stop_hook_active: false}' | bash "$SCRIPTS/hooks/stop.sh" 2>&1)"
-STATUS=$?
+run_hook stop.sh "$(stop_input)"
 expect_status 2
 expect_output_contains "既存のテスト tests/add.test.js を変更しているが"
 

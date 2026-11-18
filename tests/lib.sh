@@ -2,6 +2,7 @@
 # テスト用の最小限の道具。bats などを入れずに済ませ、macOS 標準の bash 3.2 と CI の両方で同じように動かす。
 
 HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# このファイルを読み込むテストが、検査スクリプトの場所として使う
 SCRIPTS="$HARNESS_ROOT/scripts"
 
 TESTS_RUN=0
@@ -32,6 +33,20 @@ fail() {
 run() {
   OUTPUT="$("$@" 2>&1)"
   STATUS=$?
+}
+
+# run_hook <scripts/hooks の下のスクリプト> <標準入力に渡す JSON>
+# hook には Claude Code が JSON を標準入力で渡す。対象のリポジトリとは別のディレクトリから呼び、
+# hook がカレントディレクトリではなく入力の cwd を基準にすることも合わせて確かめる。
+run_hook() {
+  local script="$1" payload="$2"
+  OUTPUT="$(cd "$WORK_ROOT" && printf '%s' "$payload" | bash "$SCRIPTS/hooks/$script" 2>&1)"
+  STATUS=$?
+}
+
+# stop_input [stop_hook_active の値]: Stop hook に渡す JSON を出力する
+stop_input() {
+  jq -n --arg cwd "$REPO" --argjson active "${1:-false}" '{cwd: $cwd, stop_hook_active: $active}'
 }
 
 expect_status() {
