@@ -48,13 +48,7 @@ tests/            スクリプトのテスト
 
 ## 対象リポジトリへの導入
 
-### 1. 設定ファイルを置く
-
-対象リポジトリのルートに `.merge-gate.json` を置く。[examples/merge-gate.json](examples/merge-gate.json) を元にする。このファイルがないリポジトリでは、hook は何もしない。
-
-`.gitignore` に `.merge-gate/` を加える。承認の記録と作業中の仕様を置く、手元だけの状態である。
-
-### 2. プラグインを有効にする
+### 1. プラグインを有効にする
 
 対象リポジトリで次の 2 つを実行する。
 
@@ -95,9 +89,32 @@ claude plugin install merge-gate@merge-gate-harness --scope project
 
 </details>
 
+### 2. 設定ファイルを置く
+
+対象リポジトリのルートで、雛形を `.merge-gate.json` としてコピーする。1 で追加した marketplace は、端末の `~/.claude/plugins/marketplaces/merge-gate-harness/` に置かれている。
+
+```bash
+cp ~/.claude/plugins/marketplaces/merge-gate-harness/examples/merge-gate.json .merge-gate.json
+```
+
+雛形は TypeScript のプロジェクトを想定した例なので、コピーしたあとに `checks` のコマンドと `paths` を、対象リポジトリに合わせて書き換える。各キーの意味は[設定ファイル](#設定ファイル)にある。このファイルがないリポジトリでは、hook は何もしない。
+
+続けて、`.gitignore` に `.merge-gate/` を加える。承認の記録と作業中の仕様を置く、手元だけの状態である。
+
+```bash
+echo '.merge-gate/' >> .gitignore
+```
+
 ### 3. CI に組み込む
 
-[examples/workflow.yml](examples/workflow.yml) を対象リポジトリの `.github/workflows/` に置き、branch protection でこのジョブを必須のステータスチェックにする。
+workflow の雛形をコピーし、言語の実行環境と依存を用意するステップを書き足す。
+
+```bash
+mkdir -p .github/workflows
+cp ~/.claude/plugins/marketplaces/merge-gate-harness/examples/workflow.yml .github/workflows/merge-gate.yml
+```
+
+そのうえで、branch protection でこのジョブを必須のステータスチェックにする。
 
 CI は次の順で判定する。
 
@@ -110,6 +127,51 @@ CI は次の順で判定する。
 ## 使い方
 
 導入が済んだリポジトリでの、1 つの変更の流れである。人間の出番は 3 回ある。
+
+```mermaid
+sequenceDiagram
+    actor H as 人間
+    participant A as エージェント
+    participant G as hook と検証役
+    participant C as CI
+
+    H->>A: /merge-gate:acceptance-first で依頼する
+    A->>A: 仕様と受け入れテストを書く
+    A->>H: 仕様とテストを提示する
+    Note over H: 出番 1 受け入れ条件を確認する
+    H->>A: 承認する
+    A->>G: 承認された内容を記録する
+
+    loop 終了時の検査が通るまで
+        A->>A: 実装する
+        G-->>A: 編集のたびに formatter と lint を実行する
+        opt 保護されたファイルを編集しようとした
+            G->>H: 許可を求める
+            Note over H: 出番 2 可否を決める
+            H-->>G: 許可または拒否
+        end
+        A->>G: 作業を終えようとする
+        G-->>A: 検査が失敗していれば差し戻す
+    end
+
+    H->>A: /merge-gate:handoff で依頼する
+    A->>G: 仕様と差分だけを検証役に渡す
+    G-->>A: 指摘を返す
+    A->>C: PR を作る
+    C->>C: 検査、PR 本文の確認、リスクの分類
+
+    Note over H: 出番 3 PR の手順に沿って動作確認をする
+    alt 低リスクの区分
+        C-->>H: 成功
+        H->>C: マージする
+    else 高リスクの区分
+        C-->>H: 人間の承認がないので失敗
+        H->>C: diff を確認して承認し、再実行後にマージする
+    else 検査か本文に不備がある
+        C-->>H: 失敗
+        H->>A: 直させる
+    end
+```
 
 ### 1. 仕様と受け入れテストを承認する
 
