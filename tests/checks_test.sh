@@ -172,13 +172,6 @@ new_repo '{"checks": {"verify": []}}'
 run "$SCRIPTS/checks/verify.sh"
 expect_status 2
 
-it "--ci を付けたときだけ checks.ci を実行する"
-new_repo '{"checks": {"verify": ["true"], "ci": ["false"]}}'
-run "$SCRIPTS/checks/verify.sh"
-expect_status 0
-run "$SCRIPTS/checks/verify.sh" --ci
-expect_status 1
-
 # ---- handoff.sh
 
 it "必要な節がすべて書かれていれば成功する"

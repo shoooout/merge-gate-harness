@@ -1,8 +1,14 @@
 name: merge-gate
-description: AI が書いた変更を、人間が diff を読まずにマージしてよいかを判定する。検査、PR 本文の確認、リスクの分類を行う。
+description: AI が書いた変更を、人間が diff を読まずにマージしてよいかを判定する。PR 本文の確認、秘密の値の検出、リスクの分類を行う。
 
-# 呼び出し側のジョブで、対象リポジトリを fetch-depth: 0 で checkout し、言語の実行環境と依存を
-# 用意してから、このアクションをステップとして呼ぶ。分岐元との差分を取るので、履歴が浅いと判定できない。
+# テストや型検査は実行しない。対象リポジトリの既存の CI が実行しているので、ここでも実行すると二重になる。
+#
+# 呼び出し側のジョブで、対象リポジトリを fetch-depth: 0 で checkout してから、このアクションをステップとして呼ぶ。
+# 分岐元との差分を取るので、履歴が浅いと判定できない。
+# テストが変更を検出できるかの確認(checks.red)を使う場合は、テストを実行できる環境も先に用意する。
+# 既存のテストのジョブの末尾にこのステップを足せば、環境の用意を二重にせずに済む。
+#
+# PR に対する実行でだけ判定する。同じ workflow が push でも動く場合、push での実行では何もしない。
 
 inputs:
   github-token:
@@ -17,11 +23,8 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: 検査を実行する
-      shell: bash
-      run: bash "$GITHUB_ACTION_PATH/scripts/checks/verify.sh" --ci
-
     - name: PR の本文に、仕様と引き継ぎの情報があるかを確かめる
+      if: github.event.pull_request
       shell: bash
       env:
         # 本文は利用者が自由に書ける文字列なので、スクリプトに直接展開せず環境変数で渡す。
@@ -37,6 +40,7 @@ runs:
         exit "$status"
 
     - name: 秘密の値が追加されていないかを確かめる
+      if: github.event.pull_request
       shell: bash
       env:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -44,6 +48,7 @@ runs:
 
     - name: 人間の確認が必要な変更かを分類する
       id: classify
+      if: github.event.pull_request
       shell: bash
       env:
         BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -56,7 +61,7 @@ runs:
           exit "$status"
         fi
 
-        # テストが今回の変更を検出できるかを確かめる。検出できない変更は、検査が通ったことが
+        # テストが今回の変更を検出できるかを確かめる。検出できない変更は、テストが通ったことが
         # 根拠にならないので、人間の確認が必要な区分に入れる。
         red_reason="$(bash "$GITHUB_ACTION_PATH/scripts/checks/red.sh" --in-place "origin/$BASE_REF")"
         red_status=$?

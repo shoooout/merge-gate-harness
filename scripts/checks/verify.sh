@@ -1,27 +1,19 @@
 #!/bin/bash
 # 対象リポジトリの .merge-gate.json に書かれた検査コマンド(テスト・型検査・ビルドなど)を実行する。
-# Stop hook と CI が同じこのスクリプトを呼ぶので、手元で通ったものが CI で落ちるずれが起きない。
+# Stop hook が作業の終了時に呼ぶ。CI からは呼ばない。テストは対象リポジトリの既存の CI が実行しており、
+# ここでも実行すると二重になるためである。
 #
-# 使い方: verify.sh [--ci]
-#   --ci  checks.verify に加えて checks.ci も実行する。mutation testing や SAST のように
-#         時間がかかり、作業の終了のたびには走らせられない検査を置く。
+# 使い方: verify.sh
 # 終了コード: 0 = すべて成功、1 = 失敗した検査がある、2 = 設定や環境の問題
 set -uo pipefail
 
 # shellcheck source=../lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
-WITH_CI=0
-[ "${1:-}" = "--ci" ] && WITH_CI=1
-
 mg_find_root || mg_die "git リポジトリの中で実行する"
 mg_has_config || mg_die "$MG_CONFIG_NAME がない"
 
 commands="$(mg_config '.checks.verify[]?')"
-if [ "$WITH_CI" -eq 1 ]; then
-  commands="$commands
-$(mg_config '.checks.ci[]?')"
-fi
 
 log="$(mktemp "${TMPDIR:-/tmp}/merge-gate-verify.XXXXXX")"
 trap 'rm -f "$log"' EXIT
