@@ -25,8 +25,11 @@ SPEC='## 要件
 ## 対象外
 並べ替えの変更
 
+## 採らなかった案
+- 絞り込みを画面の側だけで行う案。件数の表示が実際の件数とずれるため採らなかった。
+
 ## 依頼と食い違う点
-なし。依頼が挙げる cancelled の状態が実在することをコードで確かめた。
+なし。依頼が挙げる cancelled の状態が実在することを `src/order.js:12` で確かめた。
 
 ## 確認できていない前提
 なし
@@ -68,6 +71,14 @@ write_tests "$T1" "$T2" "$T3"
 run "$SCRIPTS/checks/spec.sh" .merge-gate/spec.md
 expect_status 1
 expect_output_contains "「依頼と食い違う点」"
+
+it "採らなかった案の節が欠けていれば失敗する"
+new_repo "$CONFIG"
+write_spec "$(printf '%s\n' "$SPEC" | sed '/^## 採らなかった案/,/^$/d')"
+write_tests "$T1" "$T2" "$T3"
+run "$SCRIPTS/checks/spec.sh" .merge-gate/spec.md
+expect_status 1
+expect_output_contains "「採らなかった案」"
 
 it "見出しだけで中身が空の節は、書かれていないものとして扱う"
 new_repo "$CONFIG"
