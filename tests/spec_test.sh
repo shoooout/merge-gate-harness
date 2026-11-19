@@ -167,6 +167,29 @@ printf '%s\n' "$body" >"$WORK_ROOT/body.md"
 run "$SCRIPTS/checks/spec.sh" "$WORK_ROOT/body.md"
 expect_status 0
 
+it "PR の本文で仕様を折りたたんでいても、仕様として読む"
+new_repo "$CONFIG"
+write_tests AC-1 AC-2 AC-3
+commit_all
+folded_body() {
+  printf '%s\n' "## 要点" "- 絞り込みを追加した" "" "## 仕様" "<details>" "<summary>承認済みの仕様の全文</summary>" ""
+  printf '%s\n' "$1" | sed 's/^## /### /'
+  printf '%s\n' "" "</details>" "" "## 動作確認の手順" "1. 一覧を開く"
+}
+folded_body "$SPEC" >"$WORK_ROOT/body.md"
+run "$SCRIPTS/checks/spec.sh" "$WORK_ROOT/body.md"
+expect_status 0
+expect_output_empty
+
+it "折りたたみの閉じタグだけが残った節は、書かれていないものとして扱う"
+new_repo "$CONFIG"
+write_tests AC-1 AC-2 AC-3
+commit_all
+folded_body "$(printf '%s\n' "$SPEC" | sed '$d')" >"$WORK_ROOT/body.md"
+run "$SCRIPTS/checks/spec.sh" "$WORK_ROOT/body.md"
+expect_status 1
+expect_output_contains "「変更する既存テスト」"
+
 it "コードブロックの中のコメント行を、節の区切りとして扱わない"
 new_repo "$CONFIG"
 write_tests AC-1 AC-2 AC-3

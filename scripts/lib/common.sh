@@ -57,12 +57,16 @@ mg_section_body() {
   '
 }
 
-# mg_section_has_content <見出しに含まれる語>: 節があり、空白と HTML コメント以外の行を含めば 0。
+# mg_section_has_content <見出しに含まれる語>: 節があり、空白、HTML コメント、折りたたみのタグ以外の行を含めば 0。
 # PR テンプレートの説明用コメントだけが残った節を、書かれたものと数えないため。
+# 折りたたみのタグを除くのは、PR の本文では仕様の全文を <details> で囲むからである。
+# 閉じタグは最後の節の本文に入るので、中身として数えると、空の節が書かれたものとして通る。
 mg_section_has_content() {
   mg_section_body "$1" |
     grep -v -E '^[[:space:]]*$' |
     grep -v -E '^[[:space:]]*<!--.*-->[[:space:]]*$' |
+    grep -v -E '^[[:space:]]*</?details[^>]*>[[:space:]]*$' |
+    grep -v -E '^[[:space:]]*<summary>.*</summary>[[:space:]]*$' |
     grep -q .
 }
 
