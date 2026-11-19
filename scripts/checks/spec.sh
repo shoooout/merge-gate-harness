@@ -75,17 +75,45 @@ EOF
 
 # ---- 受け入れ条件とテストの対応を追えるか
 
-ids="$( (
-  printf '%s\n' "$doc" | mg_section_body "受け入れ条件"
-  printf '%s\n' "$doc" | mg_section_body "異常系と境界値"
-) | grep -oE 'AC-[0-9]+' | sort -u)"
+# 条件とテストは、仕様に書いたテストの名前で対応づける。テストの側に条件を指す目印を書かせないのは、
+# 仕様が PR の本文にしか残らず、マージ後のテストに残った目印が何を指すのかを読み取れなくなるからである。
 
-if ! printf '%s\n' "$doc" | mg_section_body "受け入れ条件" | grep -qE 'AC-[0-9]+'; then
-  problem "受け入れ条件に AC-1 のような番号が付いていない"
+# spec_conditions: 標準入力の節の本文から、条件とテストの名前を「C<TAB>条件」「T<TAB>テストの名前」の行で出力する。
+# 行頭から始まる箇条書きの項目を 1 つの条件とし、次の項目までの行をその条件の続きとして扱う。
+# テストの名前は、「テスト:」のあとにバッククォートで囲んで書かれたものを取り出す。
+spec_conditions() {
+  awk '
+    function emit_tests(line,    at, rest, from, to) {
+      at = index(line, "テスト:")
+      if (at == 0) at = index(line, "テスト：")
+      if (at == 0) return
+      rest = substr(line, at)
+      while ((from = index(rest, "`")) > 0) {
+        rest = substr(rest, from + 1)
+        to = index(rest, "`")
+        if (to == 0) break
+        if (to > 1) print "T\t" substr(rest, 1, to - 1)
+        rest = substr(rest, to + 1)
+      }
+    }
+    /^([-*+]|[0-9]+[.)])[ \t]/ {
+      in_item = 1
+      text = $0
+      sub(/^([-*+]|[0-9]+[.)])[ \t]+/, "", text)
+      print "C\t" text
+      emit_tests($0)
+      next
+    }
+    in_item { emit_tests($0) }
+  '
+}
+
+if ! printf '%s\n' "$doc" | mg_section_body "受け入れ条件" | spec_conditions | grep -q '^C'; then
+  problem "受け入れ条件が箇条書きになっていない。条件を 1 つずつ「- 」で始まる行に書く"
 fi
 
-# 対応を探すのは、このブランチで追加された行だけにする。過去の変更で付けられた同じ番号が
-# テストに残っていても、今回の条件を検証している根拠にはならない。
+# 対応を探すのは、このブランチで追加された行だけにする。分岐元にすでにあるテストが同じ名前でも、
+# 今回の条件を検証するために書かれた根拠にはならない。
 added_test_lines=""
 existing_tests_changed=""
 while IFS="$(printf '\t')" read -r status path; do
@@ -111,15 +139,35 @@ done <<EOF
 $untracked
 EOF
 
-while IFS= read -r id; do
-  [ -n "$id" ] || continue
-  # AC-1 が AC-10 に一致しないよう、番号の直後が数字でないことを確かめる
-  if ! printf '%s\n' "$added_test_lines" | grep -qE "(^|[^A-Za-z0-9])${id}([^0-9]|\$)"; then
-    problem "${id} に対応するテストがない。対応するテストの名前かコメントに ${id} と書く"
+condition=""
+condition_has_test=1
+require_test_for_condition() {
+  if [ -n "$condition" ] && [ "$condition_has_test" -eq 0 ]; then
+    problem "条件「${condition}」に対応するテストが書かれていない。条件の下に「テスト: \`テストの名前\`」と書く"
   fi
+}
+
+while IFS="$(printf '\t')" read -r kind text; do
+  case "$kind" in
+    C)
+      require_test_for_condition
+      condition="$text"
+      condition_has_test=0
+      ;;
+    T)
+      condition_has_test=1
+      if ! printf '%s\n' "$added_test_lines" | grep -qF -- "$text"; then
+        problem "条件「${condition}」のテスト「${text}」が、このブランチで追加したテストにない"
+      fi
+      ;;
+  esac
 done <<EOF
-$ids
+$( (
+  printf '%s\n' "$doc" | mg_section_body "受け入れ条件"
+  printf '%s\n' "$doc" | mg_section_body "異常系と境界値"
+) | spec_conditions)
 EOF
+require_test_for_condition
 
 # ---- 既存テストの変更が、承認時に示されていたか
 
