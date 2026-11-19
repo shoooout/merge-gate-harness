@@ -15,8 +15,28 @@ stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false')"
 mg_find_root "${cwd:-.}" || exit 0
 mg_has_config || exit 0
 
-state_dir="$(git -C "$MG_ROOT" rev-parse --absolute-git-dir)/merge-gate"
+state_dir="$(mg_hook_state_dir)"
 mkdir -p "$state_dir"
+
+# 利用者の発言から始まった終了の試みでは、止めた回数を数え直す。
+# 数えたいのは、1 回の依頼の中でエージェントが直せずに止められ続けた回数である。
+if [ "$stop_hook_active" != "true" ]; then
+  rm -f "$state_dir/blocks"
+fi
+
+# give_up <理由>: 検査が通らないまま終了を許し、その事実を記録して利用者に知らせる。
+# 記録を残すのは、終了を許した時点では人間が気づく手段がなく、CI が落ちるまで見えないからである。
+# 記録は unresolved.sh で読み出し、PR の「検証できなかったこと」に書かせる。
+give_up() {
+  {
+    mg_current_branch
+    printf '%s\n' "$1"
+    cat "$state_dir/last-block-report" 2>/dev/null
+  } >"$state_dir/unresolved"
+  jq -n --arg message "merge-gate: $1 検査が通っていないので、このまま PR にすると CI が落ちる。" \
+    '{systemMessage: $message}'
+  exit 0
+}
 
 # 作業ツリーの内容を 1 つの値にまとめる。同じ内容に対して検査を繰り返さないための目印に使う。
 # 未追跡ファイルは status に名前しか出ないので、中身のハッシュも含める。
@@ -46,7 +66,7 @@ fi
 # 同じ理由で止め続けても進まないので終了を許し、判定は CI と人間に委ねる。
 if [ "$stop_hook_active" = "true" ] &&
   [ -f "$state_dir/last-block" ] && [ "$(cat "$state_dir/last-block")" = "$current" ]; then
-  exit 0
+  give_up "検査が通らないまま、エージェントが何も変更せずに作業を終了した。"
 fi
 
 report=""
@@ -87,10 +107,26 @@ elif [ "$verify_status" -ne 0 ]; then
 fi
 
 if [ -n "$report" ]; then
+  printf '%s' "$report" >"$state_dir/last-block-report"
+
+  # 直すたびに別の検査が落ちる状態が続くと、作業ツリーが変わり続けるので、上の「何も変わっていない」には
+  # 当たらず、止め続けることになる。回数に上限を置き、超えたら人間に判断を返す。
+  blocks="$(cat "$state_dir/blocks" 2>/dev/null)"
+  blocks=$((${blocks:-0} + 1))
+  max_blocks="$(mg_config '.limits.max_stop_blocks')"
+  case "$max_blocks" in
+    '' | *[!0-9]*) max_blocks=5 ;;
+  esac
+  if [ "$blocks" -gt "$max_blocks" ]; then
+    give_up "検査が通らないまま ${max_blocks} 回止めたので、作業の終了を許した。"
+  fi
+  printf '%s' "$blocks" >"$state_dir/blocks"
+
   printf '%s' "$current" >"$state_dir/last-block"
   printf 'merge-gate: 検査が通っていないので作業を終了できない。テストや検査を緩めず、原因を直すこと。\n%s' "$report" >&2
   exit 2
 fi
 
+rm -f "$state_dir/unresolved" "$state_dir/blocks" "$state_dir/last-block-report"
 printf '%s' "$current" >"$state_dir/last-pass"
 exit 0

@@ -22,6 +22,12 @@ mg_current_branch() {
   git -C "$MG_ROOT" symbolic-ref --quiet --short HEAD 2>/dev/null
 }
 
+# hook が実行をまたいで持つ状態の置き場を出力する。作業ツリーの外に置くのは、
+# 状態を書くたびに作業ツリーの内容が変わったと判定されるのを避けるためである。
+mg_hook_state_dir() {
+  printf '%s/merge-gate\n' "$(git -C "$MG_ROOT" rev-parse --absolute-git-dir)"
+}
+
 # 承認の記録が、現在のブランチで取られたものなら 0。
 # 記録は、それを取ったブランチの作業にだけ意味がある。マージ後に別のブランチで次の作業を始めたとき、
 # 前の作業の記録で編集の確認が出たり終了を止められたりしないよう、別のブランチの記録は無いものとして扱う。

@@ -166,12 +166,81 @@ echo "export const sub = (a, b) => a - b" >src/sub.js
 run_hook stop.sh "$(stop_input true)"
 expect_status 2
 
-it "止められたあと何も変えずに再び止まろうとしたら、繰り返しを避けて終了を許す"
+it "止められたあと何も変えずに再び止まろうとしたら、繰り返しを避けて終了を許し、利用者に知らせる"
 new_repo "$CONFIG"
 touch BROKEN
 run_hook stop.sh "$(stop_input)"
 run_hook stop.sh "$(stop_input true)"
-expect_pass_through
+expect_status 0
+[ -n "$(printf '%s' "$OUTPUT" | jq -r '.systemMessage // empty' 2>/dev/null)" ] ||
+  fail "利用者への知らせを期待した。出力: $OUTPUT"
+expect_output_contains "何も変更せずに作業を終了した"
+
+it "検査が通らないまま終了を許したら、通っていなかった検査を記録する"
+new_repo "$CONFIG"
+touch BROKEN
+run_hook stop.sh "$(stop_input)"
+run_hook stop.sh "$(stop_input true)"
+run "$SCRIPTS/checks/unresolved.sh"
+expect_status 1
+expect_output_contains "何も変更せずに作業を終了した"
+expect_output_contains "失敗: test ! -f BROKEN"
+
+it "終了を許した記録は、そのあと検査が通れば消える"
+new_repo "$CONFIG"
+touch BROKEN
+run_hook stop.sh "$(stop_input)"
+run_hook stop.sh "$(stop_input true)"
+rm BROKEN
+echo "export const sub = (a, b) => a - b" >src/sub.js
+run_hook stop.sh "$(stop_input)"
+run "$SCRIPTS/checks/unresolved.sh"
+expect_status 0
+expect_output_empty
+
+it "別のブランチで終了を許した記録は、無いものとして扱う"
+new_repo "$CONFIG"
+touch BROKEN
+run_hook stop.sh "$(stop_input)"
+run_hook stop.sh "$(stop_input true)"
+git switch -q -c other
+run "$SCRIPTS/checks/unresolved.sh"
+expect_status 0
+expect_output_empty
+
+it "終了を許した記録がなければ、何も出力しない"
+new_repo "$CONFIG"
+run "$SCRIPTS/checks/unresolved.sh"
+expect_status 0
+expect_output_empty
+
+LIMITED_CONFIG='{"base": "main", "checks": {"verify": ["test ! -f BROKEN"]}, "limits": {"max_stop_blocks": 2}}'
+
+it "変更を重ねても検査が通らないまま、止めた回数が上限を超えたら終了を許す"
+new_repo "$LIMITED_CONFIG"
+touch BROKEN
+run_hook stop.sh "$(stop_input)"
+expect_status 2
+echo "// 1 回目の修正" >>src/add.js
+run_hook stop.sh "$(stop_input true)"
+expect_status 2
+echo "// 2 回目の修正" >>src/add.js
+run_hook stop.sh "$(stop_input true)"
+expect_status 0
+expect_output_contains "2 回止めたので"
+run "$SCRIPTS/checks/unresolved.sh"
+expect_status 1
+expect_output_contains "失敗: test ! -f BROKEN"
+
+it "利用者の発言から始まった終了の試みでは、止めた回数を数え直す"
+new_repo "$LIMITED_CONFIG"
+touch BROKEN
+run_hook stop.sh "$(stop_input)"
+echo "// 1 回目の修正" >>src/add.js
+run_hook stop.sh "$(stop_input true)"
+echo "// 2 回目の修正" >>src/add.js
+run_hook stop.sh "$(stop_input false)"
+expect_status 2
 
 it "新しい会話で同じ失敗のまま終わろうとしたら、再び止める"
 new_repo "$CONFIG"
