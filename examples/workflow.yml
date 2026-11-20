@@ -1,5 +1,6 @@
 # 対象リポジトリの .github/workflows/merge-gate.yml に置く例。
 # branch protection で、このジョブと、既存のテストのジョブの両方を必須のステータスチェックにする。
+# 人間の承認を必須にすることも、branch protection で設定する。このジョブは承認の有無を確かめない。
 #
 # このジョブはテストを実行しない。テストは既存の CI に任せる。
 #
@@ -9,13 +10,9 @@ name: merge-gate
 
 on:
   pull_request:
-  # 人間の確認が必要な区分では、承認が付いた時点で判定をやり直す必要がある
-  pull_request_review:
-    types: [submitted, dismissed]
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   merge-gate:
@@ -34,5 +31,3 @@ jobs:
       # main を指定して、常に最新の検査を使う。手元のプラグインと同じ版の検査を CI でも実行するためである。
       # 特定の版に固定したいときは、main の代わりにタグか commit SHA を指定する。
       - uses: shoooout/merge-gate-harness@main
-        with:
-          github-token: ${{ github.token }}
