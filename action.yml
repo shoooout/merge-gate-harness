@@ -9,11 +9,11 @@ description: AI が書いた変更を、人間が diff を読まずにマージ�
 # 既存のテストのジョブの末尾にこのステップを足せば、環境の用意を二重にせずに済む。
 #
 # PR に対する実行でだけ判定する。同じ workflow が push でも動く場合、push での実行では何もしない。
-
-inputs:
-  github-token:
-    description: PR のレビューを読むためのトークン。人間の承認があるかどうかの確認に使う。
-    required: true
+#
+# 人間の確認が必要な区分でも、このアクションは失敗しない。警告で理由を示すだけである。
+# 人間の承認があるまでマージさせないことは、対象リポジトリの branch protection に任せる。
+# ここでも承認を確かめると、レビューを待っているだけの PR が失敗として表示され、
+# 仕様の不備や秘密の値の検出のような、承認があっても通してはいけない失敗と見分けにくくなる。
 
 outputs:
   auto-merge:
@@ -82,28 +82,8 @@ runs:
             echo "### 人間の確認が必要な理由"
             printf '%s\n' "$reasons" | sed 's/^/- /'
           } >>"$GITHUB_STEP_SUMMARY"
-          printf '%s\n' "$reasons"
+          printf '%s\n' "$reasons" | sed 's/^/::warning title=人間が diff を確認する必要がある::/'
         else
           printf '%s\n' "$reasons"
           exit "$status"
         fi
-
-    - name: 人間の確認が必要な変更に、人間の承認があるかを確かめる
-      if: steps.classify.outputs.auto_merge == 'false'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.github-token }}
-        REPO: ${{ github.repository }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      run: |
-        # 承認のあとにコミットが積まれた場合は、その承認を数えない。
-        # 承認を得てから別の変更を足す形で、確認されていない変更を通せないようにする。
-        approvals="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/reviews" |
-          jq -s --arg sha "$HEAD_SHA" \
-            '[.[][] | select(.state == "APPROVED" and .commit_id == $sha and .user.type == "User")] | length')"
-        if [ "$approvals" -eq 0 ]; then
-          echo "::error::この変更は人間の確認が必要な区分だが、最新のコミットに対する人間の承認がない。"
-          exit 1
-        fi
-        echo "最新のコミットに対する人間の承認が $approvals 件ある。"
