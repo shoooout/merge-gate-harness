@@ -24,8 +24,8 @@ merge_base="$(mg_merge_base "${2:-}")" || exit 2
 
 # 分岐元からの変更と、まだ git に追加していないファイルを合わせて「このブランチの変更」とする。
 # 承認を記録する時点では、受け入れテストは書かれただけで追加もコミットもされていないことが多い。
-tracked_changes="$(git -C "$MG_ROOT" diff --name-status --no-renames "$merge_base" --)"
-untracked="$(git -C "$MG_ROOT" ls-files -o --exclude-standard)"
+tracked_changes="$(mg_name_status "$merge_base")"
+untracked="$(mg_untracked_paths)"
 
 all_paths="$(printf '%s\n' "$tracked_changes" | cut -f2)
 $untracked"

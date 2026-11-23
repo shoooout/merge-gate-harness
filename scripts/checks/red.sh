@@ -57,7 +57,7 @@ while IFS="$TAB" read -r status path; do
   targets="$targets$status$TAB$path
 "
 done <<EOF
-$(git -C "$MG_ROOT" -c core.quotepath=off diff --name-status --no-renames "$merge_base" --)
+$(mg_name_status "$merge_base")
 EOF
 
 [ -n "$targets" ] || exit 0

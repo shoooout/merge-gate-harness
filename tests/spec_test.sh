@@ -178,6 +178,31 @@ echo "// 期待値を変えた" >>tests/add.test.js
 run "$SCRIPTS/checks/spec.sh" .merge-gate/spec.md
 expect_status 0
 
+it "非 ASCII の名前の既存テストを、仕様に挙げずに変更していれば失敗する"
+new_repo "$CONFIG"
+git switch -q main
+echo "test('old', () => {})" >"tests/注文.test.js"
+commit_all "既存のテスト"
+git switch -q work
+git merge -q main
+write_spec "$SPEC"
+write_tests "$T1" "$T2" "$T3"
+echo "// 期待値を変えた" >>"tests/注文.test.js"
+run "$SCRIPTS/checks/spec.sh" .merge-gate/spec.md
+expect_status 1
+expect_output_contains "既存のテスト tests/注文.test.js を変更しているが"
+
+it "非 ASCII の名前の未追跡テストも、追加したテストとして数える"
+new_repo "$CONFIG"
+write_spec "$SPEC"
+: >"tests/注文.test.js"
+for name in "$T1" "$T2" "$T3"; do
+  echo "test('$name', () => { expect(true).toBe(true) })" >>"tests/注文.test.js"
+done
+run "$SCRIPTS/checks/spec.sh" .merge-gate/spec.md
+expect_status 0
+expect_output_empty
+
 it "承認時に挙げていない既存テストの削除も失敗にする"
 new_repo "$CONFIG"
 write_spec "$SPEC"
@@ -255,6 +280,15 @@ NO_SPEC_CONFIG='{
 it "仕様を要しないと決めたパスだけの変更は、仕様がなくても通す"
 new_repo "$NO_SPEC_CONFIG"
 echo "# 説明" >README.md
+commit_all
+: >"$WORK_ROOT/empty.md"
+run "$SCRIPTS/checks/spec.sh" "$WORK_ROOT/empty.md"
+expect_status 0
+
+it "非 ASCII の名前でも、仕様を要しないパスだけの変更は仕様がなくても通す"
+new_repo "$NO_SPEC_CONFIG"
+mkdir -p docs
+echo "# 説明" >"docs/説明.md"
 commit_all
 : >"$WORK_ROOT/empty.md"
 run "$SCRIPTS/checks/spec.sh" "$WORK_ROOT/empty.md"

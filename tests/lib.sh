@@ -12,9 +12,19 @@ CURRENT_TEST=""
 WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/merge-gate-test.XXXXXX")"
 trap 'rm -rf "$WORK_ROOT"' EXIT
 
-# 利用者のグローバルな git 設定(署名の強制、hooks、既定ブランチ名など)に結果を左右させない
+# 利用者のグローバルな git 設定(署名の強制、hooks、既定ブランチ名など)に結果を左右させない。
+# 環境変数経由の設定も捨てる。残っていると core.quotePath の違いでパスの表記が変わり、
+# 非 ASCII のファイル名を扱う検査の結果が、実行した環境によって変わる。
 export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_CONFIG_SYSTEM=/dev/null
+if [ -n "${GIT_CONFIG_COUNT:-}" ]; then
+  _i=0
+  while [ "$_i" -lt "$GIT_CONFIG_COUNT" ]; do
+    unset "GIT_CONFIG_KEY_$_i" "GIT_CONFIG_VALUE_$_i"
+    _i=$((_i + 1))
+  done
+  unset GIT_CONFIG_COUNT _i
+fi
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 
