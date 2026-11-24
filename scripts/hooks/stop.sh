@@ -14,6 +14,7 @@ stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false')"
 
 mg_find_root "${cwd:-.}" || exit 0
 mg_has_config || exit 0
+mg_ensure_state_ignored
 
 state_dir="$(mg_hook_state_dir)"
 mkdir -p "$state_dir"

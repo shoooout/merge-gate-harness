@@ -10,7 +10,8 @@
 #
 # 使い方:
 #   lock.sh add <ファイル>...  承認された内容として記録する。記録済みのファイルは上書きする。
-#                              別のブランチの記録が残っていれば、捨ててから記録する
+#                              別のブランチの記録が残っていれば、捨ててから記録する。
+#                              このブランチで最初に記録するときは、テストが変更を検出するかも確かめて記録する
 #   lock.sh verify             記録した内容から変わったファイルを表示する
 #   lock.sh list               記録しているファイルを表示する
 #   lock.sh clear              記録をすべて消す。同じブランチで別の依頼を始めるときに使う
@@ -23,6 +24,39 @@ set -uo pipefail
 mg_find_root || mg_die "git リポジトリの中で実行する"
 LOCK_FILE="$MG_ROOT/$MG_STATE_DIR/locked"
 BRANCH_FILE="$MG_ROOT/$MG_STATE_DIR/branch"
+RED_FILE="$MG_ROOT/$MG_STATE_DIR/red"
+
+# 実装の前に検査を実行し、落ちることを確かめて結果を記録する。
+# 「テストが通った」は、テストが変更を検出できる場合にだけ根拠になる。承認の時点は実装の前なので、
+# 作業ツリーを書き換えなくても、受け入れテストがまだない機能を検出して落ちるかを確かめられる。
+# 既存の CI と同じコマンドで実行するので、受け入れテストが CI の実行する範囲に置かれていることも合わせて確かめられる。
+#
+# 落ちなくても記録は拒まない。振る舞いを変えないリファクタリングでは、落ちるテストを書けないからである。
+# その場合は gate.sh が、人間が diff を確認する理由として報告する。
+#
+# 記録の 1 行目は detected、undetected、disabled のどれかで、detected では 2 行目に落ちたコマンドを書く。
+record_red() {
+  local commands command
+  mg_has_config || return 0
+  if ! commands="$(mg_red_commands)"; then
+    echo "disabled" >"$RED_FILE"
+    return 0
+  fi
+  [ -n "$commands" ] || return 0
+  while IFS= read -r command; do
+    [ -n "$command" ] || continue
+    if ! (cd "$MG_ROOT" && bash -c "$command") >/dev/null 2>&1 </dev/null; then
+      printf 'detected\n%s\n' "$command" >"$RED_FILE"
+      echo "実装の前に検査が落ちることを確かめた: $command"
+      return 0
+    fi
+  done <<EOF
+$commands
+EOF
+  echo "undetected" >"$RED_FILE"
+  echo "実装の前なのに、検査がすべて通った。受け入れテストがこの変更を検出していないか、検査のコマンドが受け入れテストを実行していない。"
+  echo "このまま進めると、人間が diff を確認する区分になる。利用者に知らせること。"
+}
 
 # 記録は「<git のオブジェクト ID><タブ><ルートからの相対パス>」の行で持つ。
 # shasum と sha256sum の違いを避けるため、どの環境にもある git hash-object を使う。
@@ -60,9 +94,11 @@ case "$cmd" in
     fi
 
     mkdir -p "$MG_ROOT/$MG_STATE_DIR"
+    mg_ensure_state_ignored
     if ! mg_lock_is_current; then
       : >"$LOCK_FILE"
       mg_current_branch >"$BRANCH_FILE"
+      rm -f "$RED_FILE"
     fi
     while IFS= read -r rel; do
       [ -n "$rel" ] || continue
@@ -74,6 +110,10 @@ case "$cmd" in
     done <<EOF
 $rels
 EOF
+
+    # 確かめるのは、このブランチで最初に記録するときだけにする。実装の途中で承認を取り直して
+    # 記録し直すときは、実装がすでにあって検査が通るので、確かめ直すと検出していないことになってしまう。
+    [ -f "$RED_FILE" ] || record_red
     ;;
   verify)
     mg_lock_is_current || exit 0
@@ -94,7 +134,7 @@ EOF
     mg_locked_paths
     ;;
   clear)
-    rm -f "$LOCK_FILE" "$BRANCH_FILE"
+    rm -f "$LOCK_FILE" "$BRANCH_FILE" "$RED_FILE"
     ;;
   *)
     mg_die "使い方: lock.sh add <ファイル>... | verify | list | clear"

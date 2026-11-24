@@ -17,24 +17,15 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 mg_find_root || mg_die "git リポジトリの中で実行する"
-mg_has_config || mg_die "$MG_CONFIG_NAME がない"
+mg_require_config
 
 # 作業ツリーを書き換えることを、呼び出す側に明示させる。意図せず手元で実行されるのを避けるためである。
 [ "${1:-}" = "--in-place" ] || mg_die "作業ツリーを一時的に書き換える。承知のうえで --in-place を付けて実行する"
 shift
 
-# checks.red が false なら確かめない。配列ならそのコマンドを、なければ checks.verify のコマンドを使う。
-# 検査が重いリポジトリでは、単体テストだけのように軽いコマンドを checks.red に指定できる。
-red_type="$(jq -r '.checks.red | type' "$MG_CONFIG")"
-case "$red_type" in
-  boolean)
-    [ "$(mg_config '.checks.red')" = "true" ] || exit 0
-    commands="$(mg_config '.checks.verify[]?')"
-    ;;
-  array) commands="$(mg_config '.checks.red[]?')" ;;
-  *) commands="$(mg_config '.checks.verify[]?')" ;;
-esac
-[ -n "$commands" ] || mg_die "実行する検査がない。$MG_CONFIG_NAME の checks.verify か checks.red を設定する"
+# checks.red が false なら確かめない。
+commands="$(mg_red_commands)" || exit 0
+[ -n "$commands" ] || mg_die "実行する検査がない。設定の checks.verify か checks.red を指定する"
 
 if [ -n "$(git -C "$MG_ROOT" status --porcelain)" ]; then
   mg_die "未コミットの変更がある。作業ツリーを書き換えるので、変更のない状態で実行する"
@@ -43,22 +34,10 @@ fi
 merge_base="$(mg_merge_base "${1:-}")" || exit 2
 
 # 戻す対象は、実装に当たるファイルだけにする。
-# テストは今回の変更を検出する側なので残す。依存の定義とゲートの設定は、戻すと検査の実行環境そのものが変わり、
+# 依存の定義とゲートの設定まで戻すと、検査の実行環境そのものが変わり、
 # 変更を検出したのではなく環境が壊れただけの失敗を「検出した」と数えてしまう。
 TAB="$(printf '\t')"
-no_spec_patterns="$(mg_config '.paths.no_spec[]?')"
-targets=""
-while IFS="$TAB" read -r status path; do
-  [ -n "$path" ] || continue
-  mg_match "$path" tests && continue
-  mg_match "$path" dependencies && continue
-  mg_is_gate_path "$path" && continue
-  [ -n "$no_spec_patterns" ] && mg_match_patterns "$path" "$no_spec_patterns" && continue
-  targets="$targets$status$TAB$path
-"
-done <<EOF
-$(mg_name_status "$merge_base")
-EOF
+targets="$(mg_implementation_changes "$merge_base")"
 
 [ -n "$targets" ] || exit 0
 

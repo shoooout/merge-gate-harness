@@ -14,7 +14,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 mg_find_root || mg_die "git リポジトリの中で実行する"
-mg_has_config || mg_die "$MG_CONFIG_NAME がない"
+mg_require_config
 
 doc_file="${1:-}"
 [ -n "$doc_file" ] && [ -f "$doc_file" ] || mg_die "検査する文書を指定する"
