@@ -20,5 +20,5 @@
   "secret_patterns": [],
   "skip_markers": ["\\.skip\\(", "(^|[^A-Za-z])xit\\(", "(^|[^A-Za-z])xdescribe\\("],
   "limits": { "max_changed_lines": 400 },
-  "handoff_sections": ["動作確認の手順", "影響範囲", "検証できなかったこと"]
+  "handoff_sections": ["動作確認の手順", "実行した確認", "影響範囲", "独立した検証", "検証できなかったこと"]
 }
