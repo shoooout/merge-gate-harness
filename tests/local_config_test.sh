@@ -100,6 +100,52 @@ expect_output_contains "test -f src/feature.js"
 cd "$REPO" || exit 1
 git worktree remove --force "$WORK_ROOT/wt.$$"
 
+# ---- runbook.sh
+
+it "動作確認の手引きを保存しても、対象リポジトリの作業ツリーは変わらない"
+new_repo_without_config
+run "$SCRIPTS/runbook.sh" set <<EOF
+起動: make dev
+EOF
+expect_status 0
+expect_clean_worktree
+run "$SCRIPTS/runbook.sh" show
+expect_status 0
+expect_output_contains "make dev"
+
+it "手引きがないリポジトリでは、show が終了コード 1 を返す"
+new_repo_without_config
+run "$SCRIPTS/runbook.sh" show
+expect_status 1
+expect_output_empty
+
+it "空の手引きは保存しない"
+new_repo_without_config
+run "$SCRIPTS/runbook.sh" set <<EOF
+
+EOF
+expect_status 2
+run "$SCRIPTS/runbook.sh" show
+expect_status 1
+
+it "worktree からも、同じ手引きが読める"
+new_repo_without_config
+echo "起動: make dev" | "$SCRIPTS/runbook.sh" set >/dev/null
+git worktree add -q -b other "$WORK_ROOT/wt-runbook.$$" main
+cd "$WORK_ROOT/wt-runbook.$$" || exit 1
+run "$SCRIPTS/runbook.sh" show
+expect_status 0
+expect_output_contains "make dev"
+cd "$REPO" || exit 1
+git worktree remove --force "$WORK_ROOT/wt-runbook.$$"
+
+it "手引きの編集は、検査の設定と違って確認なしで通す"
+new_repo_without_config
+save_config "$CONFIG"
+run_hook pre-edit.sh "$(edit_input "$("$SCRIPTS/runbook.sh" path)")"
+expect_status 0
+expect_output_empty
+
 # ---- hook
 
 it "設定がどこにもないリポジトリでは、Stop hook は何もしない"
