@@ -179,8 +179,15 @@ new_repo "$CONFIG"
 body="## 動作確認の手順
 1. 画面を開く
 
+## 実行した確認
+- 手順 1: 画面を開いた → 注文が 3 件表示された
+
 ## 影響範囲
 注文一覧
+
+## 独立した検証
+- spec-auditor: 実行した。指摘 0 件
+- security-reviewer: 実行できなかった。sub agent を起動できなかった
 
 ## 検証できなかったこと
 なし"
@@ -196,13 +203,53 @@ expect_status 1
 expect_output_contains "「影響範囲」"
 expect_output_contains "「検証できなかったこと」"
 
+it "エージェントが実行した確認の節がなければ失敗する"
+new_repo "$CONFIG"
+body="## 動作確認の手順
+1. 画面を開く
+
+## 影響範囲
+注文一覧
+
+## 独立した検証
+- spec-auditor: 実行した。指摘 0 件
+
+## 検証できなかったこと
+なし"
+run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+expect_status 1
+expect_output_contains "「実行した確認」"
+
+it "検証役の実行状況の節がなければ失敗する"
+new_repo "$CONFIG"
+body="## 動作確認の手順
+1. 画面を開く
+
+## 実行した確認
+- 手順 1: 画面を開いた → 注文が 3 件表示された
+
+## 影響範囲
+注文一覧
+
+## 検証できなかったこと
+なし"
+run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+expect_status 1
+expect_output_contains "「独立した検証」"
+
 it "見出しだけで中身が空の節は、書かれていないものとして扱う"
 new_repo "$CONFIG"
 body="## 動作確認の手順
 <!-- ここに手順を書く -->
 
+## 実行した確認
+- 手順 1: 実行できなかった。環境がない
+
 ## 影響範囲
 注文一覧
+
+## 独立した検証
+- spec-auditor: 実行した。指摘 0 件
 
 ## 検証できなかったこと
 なし"
