@@ -4,7 +4,7 @@
 # 正当な変更があり、その可否を決められるのは人間だけだからである。
 #
 # この hook が見るのは編集ツール経由の変更だけで、シェルコマンドによる書き換えは通ってしまう。
-# そちらは Stop hook の承認済みファイルの照合と、CI の classify.sh で検知する。
+# そちらは Stop hook の承認済みファイルの照合と、classify.sh で検知する。classify.sh は、引き継ぎのときの gate.sh とハーネスの CI が呼ぶ。
 set -uo pipefail
 
 # shellcheck source=../lib/common.sh
