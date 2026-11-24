@@ -202,12 +202,70 @@ mg_grep_added() {
   '
 }
 
-# 比較の起点にするコミットを出力する。設定の base との merge-base を使うので、
-# base ブランチ側だけが進んでいても、このブランチの変更だけが差分になる。
+# mg_merge_base [比較元の ref] [コミット]: 比較の起点にするコミットを出力する。
+# 設定の base との merge-base を使うので、base ブランチ側だけが進んでいても、このブランチの変更だけが差分になる。
+# コミットを省略すると HEAD を使う。
 mg_merge_base() {
   local base="${1:-}"
   [ -n "$base" ] || base="$(mg_config '.base')"
   [ -n "$base" ] || base="origin/main"
-  git -C "$MG_ROOT" merge-base "$base" HEAD 2>/dev/null ||
+  git -C "$MG_ROOT" merge-base "$base" "${2:-HEAD}" 2>/dev/null ||
     mg_die "比較元 $base との merge-base が見つからない。fetch されているか、.merge-gate.json の base を確認する"
+}
+
+# ---- 検証した変更の識別子
+
+# PR の本文に書かれた検証の結果は、書いた時点の変更に対するものである。そのあとに変更が足されても、
+# 本文は古い結果のまま残る。本文に変更の識別子を書かせ、PR の変更から計算した識別子と比べることで、
+# 検証の結果が別の変更に対するものになった状態を検知する。
+
+# 本文の中から識別子の行を探すための正規表現。
+# このファイルの中では使わず、読み込む側のスクリプトが使うので、未使用の警告の対象から外す。
+# shellcheck disable=SC2034
+MG_CHANGE_MARKER_PATTERN='<!-- merge-gate:verified-change [0-9a-f]+ -->'
+
+# mg_change_marker <識別子>: 識別子を、PR の本文に書く形で出力する。
+# HTML のコメントにしているのは、人間が読む本文を長くしないためである。人間は識別子を見比べない。
+mg_change_marker() {
+  printf '<!-- merge-gate:verified-change %s -->\n' "$1"
+}
+
+# 作業ツリーの内容を、いまコミットしたときにできる tree として書き出し、その ID を出力する。
+# コミット前の変更と、まだ git に追加していないファイルを含める。本文を書く時点では、変更がコミットされて
+# いないことが多いためである。
+# 一時的な index を使うのは、利用者の index を書き換えないためである。
+# git に追加する処理を git 自身に任せているのは、改行の変換、実行権限、シンボリックリンクの扱いを
+# コミットのときと同じにするためである。扱いがずれると、手元と CI で識別子が一致しなくなる。
+mg_worktree_tree() {
+  local dir index tree status
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/merge-gate-index.XXXXXX")" || return 1
+  index="$(git -C "$MG_ROOT" rev-parse --git-path index)"
+  case "$index" in
+    /*) ;;
+    *) index="$MG_ROOT/$index" ;;
+  esac
+  # 利用者の index を写してから始める。空の index から始めると、すべてのファイルを読み直すことになる。
+  [ -f "$index" ] && cp "$index" "$dir/index"
+  tree="$(
+    export GIT_INDEX_FILE="$dir/index"
+    git -C "$MG_ROOT" add -A -- . ":(exclude)$MG_STATE_DIR" >/dev/null 2>&1 &&
+      git -C "$MG_ROOT" write-tree 2>/dev/null
+  )"
+  status=$?
+  rm -rf "$dir"
+  [ "$status" -eq 0 ] || return 1
+  printf '%s\n' "$tree"
+}
+
+# mg_change_id <比較の起点> <変更後の tree かコミット>: 変更の識別子を出力する。
+#
+# 識別子は、比較の起点から変わったパスと、そのパスの変更後の内容だけで決まる。
+# 差分の文面から計算しないのは、差分の出方が git の版と設定で変わるためである。
+# 変更前の内容を含めないのは、base ブランチ側の変更で識別子が変わるのを減らすためである。
+# base ブランチを取り込んでも、このブランチが変えたファイルを base ブランチが変えていなければ、識別子は変わらない。
+mg_change_id() {
+  git -C "$MG_ROOT" -c core.quotepath=off diff-tree -r --no-renames --no-abbrev "$1" "$2" \
+    -- . ":(exclude)$MG_STATE_DIR" |
+    awk -F '\t' '{ split($1, meta, " "); print meta[2] "\t" meta[4] "\t" $2 }' |
+    git hash-object --stdin
 }

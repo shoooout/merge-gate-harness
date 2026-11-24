@@ -10,6 +10,9 @@ name: merge-gate
 
 on:
   pull_request:
+    # edited を足しているのは、PR の本文だけを直したときにも検査をやり直すためである。
+    # 既定の種類だけでは、本文を直しても、次の push まで検査は古い本文のままになる。
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read

@@ -31,12 +31,16 @@ runs:
         # 直接展開すると、本文に書かれたシェルの構文がそのまま実行される。
         PR_BODY: ${{ github.event.pull_request.body }}
         BASE_REF: ${{ github.event.pull_request.base.ref }}
+        # 本文の検証の結果が、どの変更に対するものかを照合するために使う。
+        # checkout されているコミットではなく PR の先頭のコミットを渡すのは、呼び出し側が
+        # base ブランチとの merge コミットを checkout していることがあるためである。
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: |
         body_file="$(mktemp)"
         printf '%s\n' "$PR_BODY" >"$body_file"
         status=0
         bash "$GITHUB_ACTION_PATH/scripts/checks/spec.sh" "$body_file" "origin/$BASE_REF" || status=1
-        bash "$GITHUB_ACTION_PATH/scripts/checks/handoff.sh" "$body_file" || status=1
+        bash "$GITHUB_ACTION_PATH/scripts/checks/handoff.sh" --commit "$HEAD_SHA" "$body_file" "origin/$BASE_REF" || status=1
         exit "$status"
 
     - name: 秘密の値が追加されていないかを確かめる

@@ -213,6 +213,35 @@ expect_status 2
 
 # ---- handoff.sh
 
+# run_handoff <本文>: 本文に、いまの変更の識別子を足して検査する。
+# 節の有無を確かめるテストが、識別子の不備で落ちないようにするためである。
+run_handoff() {
+  run bash -c "printf '%s\n\n%s\n' \"\$1\" \"\$(\"\$2/change-id.sh\")\" | \"\$2/checks/handoff.sh\"" _ "$1" "$SCRIPTS"
+}
+
+# 本文をファイルに書き出して、そのパスを出力する。リポジトリの外に置くのは、作業ツリーの中に置くと
+# そのファイルも変更として数えられるためである。
+write_body() {
+  local file="$WORK_ROOT/body.md"
+  printf '%s\n' "$1" >"$file"
+  printf '%s\n' "$file"
+}
+
+FULL_BODY="## 動作確認の手順
+1. 画面を開く
+
+## 実行した確認
+- 手順 1: 画面を開いた → 注文が 3 件表示された
+
+## 影響範囲
+注文一覧
+
+## 独立した検証
+- spec-auditor: 実行した。指摘 0 件
+
+## 検証できなかったこと
+なし"
+
 it "必要な節がすべて書かれていれば成功する"
 new_repo "$CONFIG"
 body="## 動作確認の手順
@@ -230,14 +259,14 @@ body="## 動作確認の手順
 
 ## 検証できなかったこと
 なし"
-run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+run_handoff "$body"
 expect_status 0
 
 it "節が欠けていれば、欠けている節の名前を出して失敗する"
 new_repo "$CONFIG"
 body="## 動作確認の手順
 1. 画面を開く"
-run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+run_handoff "$body"
 expect_status 1
 expect_output_contains "「影響範囲」"
 expect_output_contains "「検証できなかったこと」"
@@ -255,7 +284,7 @@ body="## 動作確認の手順
 
 ## 検証できなかったこと
 なし"
-run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+run_handoff "$body"
 expect_status 1
 expect_output_contains "「実行した確認」"
 
@@ -272,7 +301,7 @@ body="## 動作確認の手順
 
 ## 検証できなかったこと
 なし"
-run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+run_handoff "$body"
 expect_status 1
 expect_output_contains "「独立した検証」"
 
@@ -292,15 +321,166 @@ body="## 動作確認の手順
 
 ## 検証できなかったこと
 なし"
-run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+run_handoff "$body"
 expect_status 1
 expect_output_contains "「動作確認の手順」"
 
 it "必要な節を設定で差し替えられる"
-new_repo '{"checks": {"verify": ["true"]}, "handoff_sections": ["確認方法"]}'
+new_repo '{"base": "main", "checks": {"verify": ["true"]}, "handoff_sections": ["確認方法"]}'
 body="## 確認方法
 画面を開く"
-run bash -c "printf '%s\n' \"\$1\" | \"\$2\"" _ "$body" "$SCRIPTS/checks/handoff.sh"
+run_handoff "$body"
+expect_status 0
+
+it "検証した変更の識別子がなければ、足す行を示して失敗する"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+run "$SCRIPTS/checks/handoff.sh" "$(write_body "$FULL_BODY")"
+expect_status 1
+expect_output_contains "検証した変更の識別子がない"
+expect_output_contains "$("$SCRIPTS/change-id.sh")"
+
+it "本文を書いたあとに変更を足すと、検証の結果が別の変更に対するものとして失敗する"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+commit_all
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 0
+echo "// あとから足した変更" >>src/sub.js
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 1
+expect_output_contains "別の変更に対するものである"
+expect_output_contains "$("$SCRIPTS/change-id.sh")"
+
+it "本文を書いたあとに、git に追加していないファイルを足しても失敗する"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+commit_all
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+echo "export const mul = (a, b) => a * b" >src/mul.js
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 1
+expect_output_contains "別の変更に対するものである"
+
+it "コミット前に取った識別子は、同じ内容をコミットしたあとも一致する"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+echo "export const add = (a, b) => b + a" >src/add.js
+git rm -q tests/add.test.js
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+commit_all
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 0
+run "$SCRIPTS/checks/handoff.sh" --commit HEAD "$body"
+expect_status 0
+
+it "識別子を取っても、利用者の index は変わらない"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+"$SCRIPTS/change-id.sh" >/dev/null
+run git status --porcelain
+[ "$OUTPUT" = "?? src/sub.js" ] || fail "追加していないファイルが index に入っている。出力: $OUTPUT"
+
+it "base ブランチが進んでも、それを取り込んでも、識別子は変わらない"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+commit_all
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+git switch -q main
+echo "export const mul = (a, b) => a * b" >src/mul.js
+commit_all
+git switch -q work
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 0
+git merge -q --no-edit main
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 0
+
+it "手元だけの状態の置き場にあるファイルは、変更に数えない"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+mkdir -p .merge-gate
+echo "# 仕様" >.merge-gate/spec.md
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 0
+
+it "--commit を付けると、作業ツリーに残ったファイルを見ずに、そのコミットまでの変更と比べる"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+commit_all
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+echo "テストの実行で生じたファイル" >coverage.txt
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 1
+run "$SCRIPTS/checks/handoff.sh" --commit HEAD "$body"
+expect_status 0
+
+it "base ブランチとの merge コミットを checkout していても、--commit に渡した PR の先頭のコミットで比べる"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+commit_all
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+head_sha="$(git rev-parse HEAD)"
+git switch -q main
+echo "export const mul = (a, b) => a * b" >src/mul.js
+commit_all
+git switch -q --detach main
+git merge -q --no-edit "$head_sha"
+run "$SCRIPTS/checks/handoff.sh" --commit "$head_sha" "$body" main
+expect_status 0
+
+it "--commit に渡したコミットに、本文を書いたあとの変更が入っていれば失敗する"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+commit_all
+body="$(write_body "$FULL_BODY
+
+$("$SCRIPTS/change-id.sh")")"
+echo "// あとから足した変更" >>src/sub.js
+commit_all
+run "$SCRIPTS/checks/handoff.sh" --commit HEAD "$body"
+expect_status 1
+expect_output_contains "別の変更に対するものである"
+
+it "本文の改行が CRLF でも、識別子を読み取る"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+body="$WORK_ROOT/body.md"
+printf '%s\n\n%s\n' "$FULL_BODY" "$("$SCRIPTS/change-id.sh")" | awk '{ printf "%s\r\n", $0 }' >"$body"
+grep -q "$(printf '\r')" "$body" || fail "テストの本文が CRLF になっていない"
+run "$SCRIPTS/checks/handoff.sh" "$body"
+expect_status 0
+
+it "本文のファイルが作業ツリーの中にあれば、検査せずにエラーにする"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+printf '%s\n\n%s\n' "$FULL_BODY" "$("$SCRIPTS/change-id.sh")" >pr-body.md
+run "$SCRIPTS/checks/handoff.sh" pr-body.md
+expect_status 2
+expect_output_contains "リポジトリの外に置く"
+
+it "本文のファイルが手元だけの状態の置き場にあれば、検査する"
+new_repo "$CONFIG"
+echo "export const sub = (a, b) => a - b" >src/sub.js
+mkdir -p .merge-gate
+printf '%s\n\n%s\n' "$FULL_BODY" "$("$SCRIPTS/change-id.sh")" >.merge-gate/pr-body.md
+run "$SCRIPTS/checks/handoff.sh" .merge-gate/pr-body.md
 expect_status 0
 
 # ---- lock.sh
