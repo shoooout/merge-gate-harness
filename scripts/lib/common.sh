@@ -140,11 +140,24 @@ mg_relpath() {
   esac
 }
 
+# mg_name_status <比較元>: 変更を「状態<TAB>パス」で出力する。
+# core.quotePath の既定は true で、非 ASCII のパスは引用符と八進エスケープになる。
+# その文字列は paths の glob と一致しないので、既存テストやゲートの変更を検知できない。
+mg_name_status() {
+  git -C "$MG_ROOT" -c core.quotepath=off diff --name-status --no-renames "$1" --
+}
+
+# 未追跡のパスを 1 行ずつ出力する。引用を切る理由は mg_name_status と同じ。
+mg_untracked_paths() {
+  git -C "$MG_ROOT" -c core.quotepath=off ls-files -o --exclude-standard
+}
+
 # mg_added_lines <比較の起点>: このブランチで追加された行を「パス<TAB>行番号<TAB>内容」の形で出力する。
 # まだ git に追加していないファイルは、全行を追加された行として扱う。
 # 変更後のファイル全体ではなく追加された行だけを見るのは、以前からある記述を今回の変更の責任にしないためである。
 mg_added_lines() {
   {
+    # 追加行のパスも引用させない。理由は mg_name_status と同じ。
     git -C "$MG_ROOT" -c core.quotepath=off diff -U0 --no-renames --no-color "$1" -- | awk '
       # ファイルごとのヘッダーの中でだけ「+++ 」をパスとして読む。
       # 本文の追加行がたまたま「++ 」で始まっていても、パスと取り違えないようにする。
@@ -166,7 +179,7 @@ mg_added_lines() {
         line++
       }
     '
-    git -C "$MG_ROOT" -c core.quotepath=off ls-files -o --exclude-standard | while IFS= read -r path; do
+    mg_untracked_paths | while IFS= read -r path; do
       # バイナリは行として読めないので対象にしない
       grep -Iq . "$MG_ROOT/$path" 2>/dev/null || continue
       awk -v path="$path" '{ printf "%s\t%d\t%s\n", path, NR, $0 }' "$MG_ROOT/$path"

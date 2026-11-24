@@ -23,7 +23,7 @@ add_reason() {
 
 # rename は「元のパスの削除」と「新しいパスの追加」の両方として扱う。
 # 既存テストを別名に移してから書き換える形で、テストの変更検知をすり抜けられないようにする。
-changes="$(git -C "$MG_ROOT" diff --name-status --no-renames "$merge_base" --)"
+changes="$(mg_name_status "$merge_base")"
 
 test_files=""
 while IFS="$(printf '\t')" read -r status path; do

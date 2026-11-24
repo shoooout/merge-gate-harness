@@ -112,6 +112,45 @@ run "$SCRIPTS/checks/classify.sh"
 expect_status 3
 expect_output_contains "ゲートの定義を変更している: .github/workflows/ci.yml"
 
+it "非 ASCII の名前の既存テストの変更を人間に回す"
+new_repo "$CONFIG"
+git switch -q main
+echo "test('注文', () => {})" >"tests/注文.test.js"
+commit_all "既存のテスト"
+git switch -q work
+git merge -q main
+echo "// 期待値を変えた" >>"tests/注文.test.js"
+commit_all
+run "$SCRIPTS/checks/classify.sh"
+expect_status 3
+expect_output_contains "既存のテストを変更している: tests/注文.test.js"
+
+it "非 ASCII の名前のテストに skip の記述があれば人間に回す"
+new_repo "$CONFIG"
+echo "test.skip('注文', () => {})" >"tests/注文.test.js"
+commit_all
+run "$SCRIPTS/checks/classify.sh"
+expect_status 3
+expect_output_contains "テストを skip する記述を追加している: tests/注文.test.js"
+
+it "非 ASCII の名前のゲートの定義の変更を人間に回す"
+new_repo "$CONFIG"
+mkdir -p .github/workflows
+echo "name: ci" >".github/workflows/検査.yml"
+commit_all
+run "$SCRIPTS/checks/classify.sh"
+expect_status 3
+expect_output_contains "ゲートの定義を変更している: .github/workflows/検査.yml"
+
+it "非 ASCII の名前の、人間が確認すると決めたパスの変更を人間に回す"
+new_repo "$CONFIG"
+mkdir -p src/auth
+echo "export const login = () => {}" >"src/auth/ログイン.js"
+commit_all
+run "$SCRIPTS/checks/classify.sh"
+expect_status 3
+expect_output_contains "人間が確認すると決めたパスを変更している: src/auth/ログイン.js"
+
 it "変更行数が上限を超えたら人間に回す"
 new_repo "$CONFIG"
 i=0

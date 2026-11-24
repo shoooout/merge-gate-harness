@@ -164,6 +164,16 @@ expect_clean_tree() {
   [ -z "$(git status --porcelain)" ] || fail "作業ツリーが元に戻っていない: $(git status --porcelain)"
 }
 
+it "非 ASCII の名前の実装ファイルも、分岐元に戻して検出を確かめる"
+new_red_repo
+echo "export const sub = (a, b) => a - b" >"src/機能.js"
+echo "grep -q sub src/機能.js" >tests/kinou.sh
+commit_all
+run "$SCRIPTS/checks/red.sh" --in-place
+expect_status 0
+expect_clean_tree
+[ -f "src/機能.js" ] || fail "追加したファイルが戻っていない"
+
 it "追加したテストが変更を検出するなら成功し、作業ツリーを元に戻す"
 new_red_repo
 echo "export const sub = (a, b) => a - b" >src/sub.js
