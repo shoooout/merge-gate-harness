@@ -1,5 +1,5 @@
 #!/bin/bash
-# PostToolUse hook。編集されたファイルに、対象リポジトリの .merge-gate.json の checks.on_edit で
+# PostToolUse hook。編集されたファイルに、対象リポジトリの検査の設定の checks.on_edit で
 # 指定された formatter や lint を実行する。失敗した場合は出力をエージェントに返し、その場で直させる。
 #
 # checks.on_edit の各要素は {"pattern": "<glob>", "command": "<コマンド>"} で、

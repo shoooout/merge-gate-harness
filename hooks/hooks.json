@@ -1,6 +1,17 @@
 {
-  "description": "merge-gate: 編集前の承認確認、編集後の formatter と lint、終了前の検査",
+  "description": "merge-gate: 開始時の案内、編集前の承認確認、編集後の formatter と lint、終了前の検査",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-start.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 対象リポジトリの .merge-gate.json に書かれた検査コマンド(テスト・型検査・ビルドなど)を実行する。
+# 対象リポジトリの検査の設定に書かれた検査コマンド(テスト・型検査・ビルドなど)を実行する。
 # Stop hook が作業の終了時に呼ぶ。CI からは呼ばない。テストは対象リポジトリの既存の CI が実行しており、
 # ここでも実行すると二重になるためである。
 #
@@ -11,7 +11,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 mg_find_root || mg_die "git リポジトリの中で実行する"
-mg_has_config || mg_die "$MG_CONFIG_NAME がない"
+mg_require_config
 
 commands="$(mg_config '.checks.verify[]?')"
 
@@ -37,7 +37,7 @@ EOF
 
 if [ "$ran" -eq 0 ]; then
   # 検査が 1 つもないまま「成功」を返すと、何も検証していない変更が通ってしまう
-  mg_die "$MG_CONFIG_NAME の checks.verify が空で、実行する検査がない"
+  mg_die "設定の checks.verify が空で、実行する検査がない"
 fi
 
 [ "$failed" -eq 0 ]
